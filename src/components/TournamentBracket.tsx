@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -301,7 +302,7 @@ export function TournamentBracket({ rounds }: { rounds: BracketRound[] }) {
             {layout.map(({ round, x, matches }, roundIndex) => (
               <div key={round.name} className="absolute" style={{ left: x, top: 0 }}>
                 {/* Round header */}
-                <div className="sticky top-0 z-20 bg-background py-4 mb-8">
+                <div className="sticky top-0 z-20 py-4 mb-8">
                   <h3 className="text-lg font-bold text-center">{round.name}</h3>
                 </div>
                 

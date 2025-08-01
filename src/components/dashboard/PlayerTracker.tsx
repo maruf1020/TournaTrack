@@ -56,6 +56,18 @@ function MatchRow({ match, selectedPlayerId }: { match: Match; selectedPlayerId:
         else result = 'loss';
     }
 
+    let formattedDate = null;
+    if (match.date) {
+        try {
+            const jsDate = (match.date as any).toDate ? (match.date as any).toDate() : new Date(match.date);
+            if (!isNaN(jsDate.getTime())) {
+                formattedDate = format(jsDate, 'PP');
+            }
+        } catch (e) {
+            // Invalid date, leave as null
+        }
+    }
+
 
     return (
         <div className="p-3 rounded-md bg-muted/50 space-y-2">
@@ -68,8 +80,8 @@ function MatchRow({ match, selectedPlayerId }: { match: Match; selectedPlayerId:
                         result === 'loss' && 'bg-rose-100 text-rose-800',
                         result === 'pending' && 'bg-slate-100 text-slate-800'
                      )}>{result}</span>
-                    {match.date && (
-                        <div className="font-medium">{format((match.date as any).toDate ? (match.date as any).toDate() : new Date(match.date), 'PP')}</div>
+                    {formattedDate && (
+                        <div className="font-medium">{formattedDate}</div>
                     )}
                 </div>
             </div>

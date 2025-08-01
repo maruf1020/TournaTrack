@@ -21,15 +21,97 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Lock, Palette, Trash2, ShieldX, Gamepad, Eye } from 'lucide-react';
+import { Loader2, Lock, Palette, Trash2, ShieldX, Gamepad, Eye, Download, Upload, AlertTriangle, Settings2 } from 'lucide-react';
 import type { Game, Match, PublicSettings } from '@/lib/types';
-import { getGames, addGame, deleteGame, getMatches, deleteMatchesByTournament, getPublicSettings, updatePublicSettings } from '@/lib/services';
+import { getGames, addGame, deleteGame, getMatches, deleteMatchesByTournament, getPublicSettings, updatePublicSettings, exportFullDatabase, importFullDatabase } from '@/lib/services';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 
 const matchStatuses: Match['status'][] = ['draft', 'upcoming', 'ongoing', 'finished', 'cancelled'];
+
+function TournamentSettingsCard() {
+    const { toast } = useToast();
+    const [settings, setSettings] = React.useState<PublicSettings | null>(null);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isSaving, setIsSaving] = React.useState(false);
+
+    React.useEffect(() => {
+        const unsubscribe = getPublicSettings((settingsData) => {
+            setSettings(settingsData);
+            setIsLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const handleCheckedChange = (key: keyof PublicSettings, checked: boolean) => {
+        setSettings(prev => {
+            if (!prev) return null;
+            return { ...prev, [key]: checked };
+        });
+    };
+
+    const handleSave = async () => {
+        if (!settings) return;
+        setIsSaving(true);
+        try {
+            await updatePublicSettings(settings);
+            toast({ title: 'Settings Saved', description: 'Tournament settings have been updated.' });
+        } catch (error: any) {
+            toast({ title: 'Error', description: `Failed to save settings: ${error.message}`, variant: 'destructive' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Settings2 /> Tournament Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <Skeleton className="h-8 w-full" />
+                </CardContent>
+                 <CardFooter>
+                    <Skeleton className="h-10 w-24" />
+                </CardFooter>
+            </Card>
+        )
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Settings2 /> Tournament Settings</CardTitle>
+                <CardDescription>Configure options for tournament generation and management.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="edit-bracket">Allow Bracket Editing</Label>
+                        <p className="text-xs text-muted-foreground">
+                            Enable editing players in a generated bracket before creation.
+                        </p>
+                    </div>
+                    <Switch
+                        id="edit-bracket"
+                        checked={settings?.allowBracketEditing ?? false}
+                        onCheckedChange={(checked) => handleCheckedChange('allowBracketEditing', checked)}
+                    />
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button onClick={handleSave} disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Settings
+                </Button>
+            </CardFooter>
+        </Card>
+    );
+}
 
 function PublicVisibilityCard() {
     const { toast } = useToast();
@@ -50,7 +132,8 @@ function PublicVisibilityCard() {
                         ongoing: true,
                         finished: true,
                         cancelled: true,
-                    }
+                    },
+                    allowBracketEditing: false,
                 });
             }
             setIsLoading(false);
@@ -382,6 +465,110 @@ function DangerZoneCard() {
     );
 }
 
+function BackupRestoreCard() {
+    const { toast } = useToast();
+    const [isExporting, setIsExporting] = React.useState(false);
+    const [isImporting, setIsImporting] = React.useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const backupData = await exportFullDatabase();
+            const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+                JSON.stringify(backupData, null, 2)
+            )}`;
+            const link = document.createElement("a");
+            link.href = jsonString;
+
+            const now = new Date();
+            const date = now.toISOString().split('T')[0];
+            const time = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+            link.download = `tournatrack_backup_${date}_${time}.json`;
+
+            link.click();
+            toast({ title: "Export Successful", description: "Database backup has been downloaded." });
+        } catch (error: any) {
+            toast({ title: "Export Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setIsExporting(false);
+        }
+    };
+    
+    const triggerImport = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsImporting(true);
+        try {
+            const content = await file.text();
+            const backupData = JSON.parse(content);
+            
+            // This is a destructive action, so it's good it's in an alert dialog
+            await importFullDatabase(backupData);
+
+            toast({ title: "Import Successful", description: "Database has been restored from backup. The page will now reload." });
+            // It's a good practice to reload the page to reflect the new state everywhere
+            setTimeout(() => window.location.reload(), 2000);
+        } catch (error: any) {
+            toast({ title: "Import Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setIsImporting(false);
+            if(event.target) event.target.value = ""; // Reset file input
+        }
+    };
+
+
+    return (
+        <Card className="border-amber-500">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle /> Backup & Restore</CardTitle>
+                <CardDescription>Create a full backup of your database or restore it from a file. Use with extreme caution.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div>
+                    <h4 className="font-semibold text-foreground">Export Database</h4>
+                    <p className="text-sm text-muted-foreground mb-2">Download a JSON file containing all data from employees, matches, games, and settings.</p>
+                    <Button variant="outline" onClick={handleExport} disabled={isExporting}>
+                        {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                        Export Full Backup
+                    </Button>
+                </div>
+                <div className="border-t pt-4">
+                     <h4 className="font-semibold text-foreground">Import Database</h4>
+                    <p className="text-sm text-muted-foreground mb-2">Restore the database from a backup file. <span className="font-bold text-destructive">This will delete all current data and replace it.</span></p>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                             <Button variant="destructive" disabled={isImporting}>
+                                {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                                Import Backup
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                             <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This action is highly destructive and cannot be undone. It will permanently erase all current data in the database and replace it with the contents of the backup file.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                             <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={triggerImport}>
+                                    I understand, proceed with import
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={handleImport}/>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
 
 export default function SettingsPage() {
     const { user, isAdmin, loading } = useAuth();
@@ -423,19 +610,17 @@ export default function SettingsPage() {
                 <h1 className="text-3xl font-bold tracking-tight font-headline">Settings</h1>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="space-y-6">
+                        <AppearanceCard />
+                        <TournamentSettingsCard />
                         <PublicVisibilityCard />
                         <GameManagementCard />
-                        <AppearanceCard />
                     </div>
                     <div className="space-y-6">
                         <DangerZoneCard />
+                        <BackupRestoreCard />
                     </div>
                 </div>
             </div>
         </AppLayout>
     );
 }
-
-    
-
-    

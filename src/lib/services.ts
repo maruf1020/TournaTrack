@@ -7,7 +7,7 @@
  */
 
 import { db } from './firebase';
-import { collection, onSnapshot, doc, setDoc, addDoc, writeBatch, deleteDoc, updateDoc, query, getDocs, where, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, addDoc, writeBatch, deleteDoc, updateDoc, query, getDocs, where, getDoc, Timestamp } from 'firebase/firestore';
 import type { Player, Match, EmployeeUploadData, Game, PublicSettings } from './types';
 
 
@@ -371,7 +371,8 @@ export function getPublicSettings(callback: (settings: PublicSettings | null) =>
             ongoing: true,
             finished: true,
             cancelled: true,
-          }
+          },
+          allowBracketEditing: false,
         };
         setDoc(settingsDoc, defaultSettings).then(() => callback(defaultSettings));
       }
@@ -393,6 +394,84 @@ export async function updatePublicSettings(settings: PublicSettings): Promise<vo
   await setDoc(settingsRef, settings, { merge: true }); // Use setDoc with merge to create if not exists
 }
 
-    
 
+// === Backup & Restore Services ===
+
+const COLLECTIONS_TO_BACKUP = ['employees', 'matches', 'games', 'settings'];
+
+// Helper to serialize data, converting Timestamps to a specific object format
+const serializeData = (data: any): any => {
+    for (const key in data) {
+        if (data[key] instanceof Timestamp) {
+            data[key] = {
+                _type: 'timestamp',
+                value: data[key].toDate().toISOString()
+            };
+        } else if (data[key] instanceof Object) {
+            serializeData(data[key]);
+        }
+    }
+    return data;
+};
+
+// Helper to deserialize data, converting objects back to Timestamps
+const deserializeData = (data: any): any => {
+    for (const key in data) {
+        if (data[key] && data[key]._type === 'timestamp') {
+            data[key] = Timestamp.fromDate(new Date(data[key].value));
+        } else if (data[key] instanceof Object) {
+            deserializeData(data[key]);
+        }
+    }
+    return data;
+};
+
+
+/**
+ * Fetches all data from the specified collections for a full database backup.
+ * @returns A JSON object containing all data.
+ */
+export async function exportFullDatabase(): Promise<any> {
+    const backup: { [key: string]: any[] } = {};
+    for (const collectionName of COLLECTIONS_TO_BACKUP) {
+        const collectionRef = collection(db, collectionName);
+        const snapshot = await getDocs(collectionRef);
+        backup[collectionName] = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return { id: doc.id, ...serializeData(data) };
+        });
+    }
+    return backup;
+}
+
+/**
+ * Restores the database from a backup object. This is a destructive operation.
+ * It will delete all existing data in the collections before importing.
+ * @param backupData - The backup data object.
+ */
+export async function importFullDatabase(backupData: { [key: string]: any[] }): Promise<void> {
+    // Step 1: Delete all existing documents in the collections
+    for (const collectionName of COLLECTIONS_TO_BACKUP) {
+        if (!backupData[collectionName]) continue; // Skip if collection not in backup
+        const collectionRef = collection(db, collectionName);
+        const snapshot = await getDocs(collectionRef);
+        if (snapshot.empty) continue;
+        const deleteBatch = writeBatch(db);
+        snapshot.docs.forEach(doc => deleteBatch.delete(doc.ref));
+        await deleteBatch.commit();
+    }
     
+    // Step 2: Import new documents from the backup
+    const importBatch = writeBatch(db);
+    for (const collectionName of COLLECTIONS_TO_BACKUP) {
+        if (backupData[collectionName]) {
+            backupData[collectionName].forEach((docDataWithId: any) => {
+                const { id, ...data } = docDataWithId;
+                const deserialized = deserializeData(data);
+                const docRef = doc(db, collectionName, id);
+                importBatch.set(docRef, deserialized);
+            });
+        }
+    }
+    await importBatch.commit();
+}

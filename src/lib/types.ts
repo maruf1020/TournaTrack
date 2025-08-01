@@ -76,6 +76,7 @@ export type PublicSettings = {
   visibleStatuses: {
     [key in Match['status']]: boolean;
   };
+  allowBracketEditing: boolean;
 };
 
 

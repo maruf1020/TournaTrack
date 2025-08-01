@@ -433,7 +433,19 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMatches.length > 0 ? filteredMatches.map((match) => (
+              {filteredMatches.length > 0 ? filteredMatches.map((match) => {
+                let formattedDate = null;
+                if (match.date && match.isDatePublished) {
+                    try {
+                        const jsDate = (match.date as any).toDate ? (match.date as any).toDate() : new Date(match.date);
+                        if (!isNaN(jsDate.getTime())) {
+                            formattedDate = format(jsDate, 'PP');
+                        }
+                    } catch (e) {
+                        // Invalid date, leave as null
+                    }
+                }
+                return (
                 <TableRow key={match.id} className="odd:bg-muted/10">
                   <TableCell className="font-medium whitespace-nowrap">{match.game} <span className="text-muted-foreground text-xs">({match.matchType})</span></TableCell>
                   <TableCell className="whitespace-nowrap">{match.matchName}</TableCell>
@@ -447,7 +459,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
                    )}
                   </TableCell>
                   <TableCell>
-                    {match.date && match.isDatePublished ? format((match.date as any).toDate ? (match.date as any).toDate() : new Date(match.date), 'PP') : <span className="text-muted-foreground">TBD</span>}
+                    {formattedDate ? formattedDate : <span className="text-muted-foreground">TBD</span>}
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={match.status} />
@@ -466,7 +478,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
                     </TableCell>
                   )}
                 </TableRow>
-              )) : (
+              )}) : (
                 <TableRow>
                   <TableCell colSpan={isAdmin ? 7 : 6} className="h-24 text-center">
                     No matches found for the current filters.

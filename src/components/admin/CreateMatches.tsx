@@ -10,9 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { getPlayers, addMatches } from '@/lib/services';
+import { getPlayers, addMatches, getPublicSettings } from '@/lib/services';
 import { branches } from '@/lib/placeholder-data';
-import type { Player, Match } from '@/lib/types';
+import type { Player, Match, PublicSettings } from '@/lib/types';
 import { Loader2, Shuffle, Users, Sword, UserCheck, GitBranch } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -38,7 +38,6 @@ const createMatchesSchema = z.object({
 type CreateMatchesFormInputs = z.infer<typeof createMatchesSchema>;
 
 type GeneratedMatch = Omit<Match, 'id' | 'date' | 'startTime' | 'endTime' | 'isDatePublished'>;
-
 
 const PlayerListDisplay = ({ players, placeholder }: { players: Player[], placeholder?: string }) => {
   if (placeholder) {
@@ -174,6 +173,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
   const [branchSearch, setBranchSearch] = React.useState("");
   const [selectedPlayerIds, setSelectedPlayerIds] = React.useState<string[]>([]);
   const [isPlayerSelectionOpen, setIsPlayerSelectionOpen] = React.useState(false);
+  const [settings, setSettings] = React.useState<PublicSettings | null>(null);
 
   const { register, handleSubmit, control, watch, formState: { errors }, setValue } = useForm<CreateMatchesFormInputs>({
     resolver: zodResolver(createMatchesSchema),
@@ -192,14 +192,23 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
   const numPlayers = parseInt(numPlayersRaw || '0', 10);
   
   React.useEffect(() => {
-    const unsub = getPlayers(setPlayers);
-    return () => unsub();
+    const unsubPlayers = getPlayers(setPlayers);
+    const unsubSettings = getPublicSettings(setSettings);
+    return () => {
+        unsubPlayers();
+        unsubSettings();
+    }
   }, []);
 
   const playersInSelectedBranches = React.useMemo(() => {
     if (!selectedBranches || selectedBranches.length === 0) return [];
     return players.filter(p => selectedBranches.includes(p.branch));
   }, [players, selectedBranches]);
+  
+  const selectedPlayersFull = React.useMemo(() => {
+    return players.filter(p => selectedPlayerIds.includes(p.id));
+  }, [players, selectedPlayerIds]);
+
 
   React.useEffect(() => {
     setSelectedPlayerIds([]);
@@ -323,6 +332,37 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
     }
     setIsGenerating(false);
   };
+  
+   const handlePlayerSwap = (roundIndex: number, matchIndex: number, playerSlot: 'player1' | 'player2', teamIndex: number, newPlayerId: string) => {
+        const newTournament = [...generatedTournament];
+        const match = newTournament[roundIndex][matchIndex];
+        const newPlayer = players.find(p => p.id === newPlayerId);
+        if (!newPlayer) return;
+
+        const currentSlotPlayer = match[playerSlot][teamIndex];
+
+        // Find if the newPlayer is already in this match
+        let otherSlot: 'player1' | 'player2' | null = null;
+        let otherIndex = -1;
+
+        if (match.player1.some((p, i) => { if (p.id === newPlayerId) { otherIndex = i; return true; } return false; })) {
+            otherSlot = 'player1';
+        } else if (match.player2.some((p, i) => { if (p.id === newPlayerId) { otherIndex = i; return true; } return false; })) {
+            otherSlot = 'player2';
+        }
+
+        if (otherSlot && otherIndex !== -1) {
+            // It's a swap within the same match
+            const otherSlotPlayer = match[otherSlot][otherIndex];
+            match[otherSlot][otherIndex] = currentSlotPlayer;
+            match[playerSlot][teamIndex] = otherSlotPlayer;
+        } else {
+            // It's a simple replacement (player is from outside this match)
+            match[playerSlot][teamIndex] = newPlayer;
+        }
+        
+        setGeneratedTournament(newTournament);
+    };
 
   const handleCreateTournament = async () => {
     if (generatedTournament.length === 0) return;
@@ -496,15 +536,58 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
                     <h4 className="font-semibold text-lg">{getRoundName(roundIndex, generatedTournament.length)} ({round.length} matches)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {round.map((match, matchIndex) => (
-                            <div key={matchIndex} className="border rounded-md p-3 bg-muted/50">
+                            <div key={matchIndex} className="border rounded-md p-3 bg-muted/50 space-y-2">
                                 <p className="font-bold text-sm mb-2">{match.matchName}</p>
                                 {match.allPlayers ? (
                                    <p className="font-semibold">Battle Royale ({match.allPlayers.length} players)</p>
                                 ) : (
                                     <div className="space-y-1">
-                                        <PlayerListDisplay players={match.player1} placeholder={match.player1Placeholder} />
+                                        <div>
+                                            {match.player1.map((p, teamIndex) => (
+                                                <div key={p.id}>
+                                                  {settings?.allowBracketEditing ? (
+                                                    <Select
+                                                        defaultValue={p.id}
+                                                        onValueChange={(newPlayerId) => handlePlayerSwap(roundIndex, matchIndex, 'player1', teamIndex, newPlayerId)}
+                                                    >
+                                                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {selectedPlayersFull.map(player => <SelectItem key={player.id} value={player.id}>{player.name}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                  ) : (
+                                                    <PlayerListDisplay players={[p]} />
+                                                  )}
+                                                </div>
+                                            ))}
+                                        </div>
                                         <div className="font-sans font-bold text-center text-xs py-1">vs</div>
-                                        <PlayerListDisplay players={match.player2} placeholder={match.player2Placeholder} />
+                                        <div>
+                                            {match.player2.map((p, teamIndex) => (
+                                                <div key={p.id}>
+                                                  {settings?.allowBracketEditing ? (
+                                                     <Select
+                                                        defaultValue={p.id}
+                                                        onValueChange={(newPlayerId) => handlePlayerSwap(roundIndex, matchIndex, 'player2', teamIndex, newPlayerId)}
+                                                    >
+                                                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {selectedPlayersFull.map(player => <SelectItem key={player.id} value={player.id}>{player.name}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                  ) : (
+                                                    <PlayerListDisplay players={[p]} />
+                                                  )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {(match.player1Placeholder || match.player2Placeholder) && (
+                                            <>
+                                                <PlayerListDisplay players={[]} placeholder={match.player1Placeholder} />
+                                                <div className="font-sans font-bold text-center text-xs py-1">vs</div>
+                                                <PlayerListDisplay players={[]} placeholder={match.player2Placeholder} />
+                                            </>
+                                        )}
                                     </div>
                                 )}
                             </div>
