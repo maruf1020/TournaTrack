@@ -9,11 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { games, branches } from '@/lib/placeholder-data';
+import { branches } from '@/lib/placeholder-data';
 import { Bot, AlertCircle, Sparkles, Users, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { addMatches } from '@/lib/services';
+import { addMatches, getGames } from '@/lib/services';
 import { useAuth } from '@/hooks/use-auth';
+import type { Game } from '@/lib/types';
 
 type FormState = {
   matchups?: SuggestMatchupsOutput['matchups'];
@@ -31,8 +32,14 @@ type FormState = {
 export function MatchupSuggestor() {
   const [state, setState] = React.useState<FormState>({ message: '' });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [games, setGames] = React.useState<Game[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  React.useEffect(() => {
+    const unsub = getGames(setGames);
+    return () => unsub();
+  }, []);
 
   const handleSuggestMatchups = async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -116,11 +123,15 @@ export function MatchupSuggestor() {
                         <SelectValue placeholder="Select a game" />
                     </SelectTrigger>
                     <SelectContent>
-                        {games.map((game) => (
-                        <SelectItem key={game.id} value={game.name}>
-                            {game.name}
-                        </SelectItem>
-                        ))}
+                        {games.length > 0 ? (
+                            games.map((game) => (
+                            <SelectItem key={game.id} value={game.name}>
+                                {game.name}
+                            </SelectItem>
+                            ))
+                        ) : (
+                            <SelectItem value="none" disabled>No games found</SelectItem>
+                        )}
                     </SelectContent>
                     </Select>
                 </div>

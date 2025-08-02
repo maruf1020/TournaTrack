@@ -21,6 +21,7 @@ import {
   LogOut,
   LogIn,
   List,
+  Sparkles
 } from 'lucide-react';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
@@ -99,6 +100,18 @@ export default function AppSidebar() {
                     </SidebarMenuButton>
                 </SidebarMenuItem>
             )}
+            <SidebarMenuItem>
+                <SidebarMenuButton
+                    asChild
+                    isActive={pathname === '/about'}
+                    tooltip={{ children: 'The Spark', side: 'right' }}
+                    >
+                    <Link href="/about">
+                        <Sparkles />
+                        <span>The Spark</span>
+                    </Link>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               {user ? (
                  <SidebarMenuButton onClick={handleLogout} tooltip={{ children: 'Logout', side: 'right' }}>

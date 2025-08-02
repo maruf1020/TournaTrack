@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Lock, Palette, Trash2, ShieldX, Gamepad, Eye, Download, Upload, AlertTriangle, Settings2 } from 'lucide-react';
+import { Loader2, Lock, Palette, Trash2, ShieldX, Gamepad, Eye, Download, Upload, AlertTriangle, Settings2, Save } from 'lucide-react';
 import type { Game, Match, PublicSettings } from '@/lib/types';
 import { getGames, addGame, deleteGame, getMatches, deleteMatchesByTournament, getPublicSettings, updatePublicSettings, exportFullDatabase, importFullDatabase } from '@/lib/services';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -134,6 +134,7 @@ function PublicVisibilityCard() {
                         cancelled: true,
                     },
                     allowBracketEditing: false,
+                    primaryColor: '#ff6600',
                 });
             }
             setIsLoading(false);
@@ -321,6 +322,21 @@ function GameManagementCard() {
 
 function AppearanceCard() {
     const { toast } = useToast();
+    const [settings, setSettings] = React.useState<PublicSettings | null>(null);
+    const [color, setColor] = React.useState('#ff6600');
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isSaving, setIsSaving] = React.useState(false);
+
+    React.useEffect(() => {
+        const unsubscribe = getPublicSettings((settingsData) => {
+            setSettings(settingsData);
+            if (settingsData?.primaryColor) {
+                setColor(settingsData.primaryColor);
+            }
+            setIsLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
 
     const hexToHsl = (hex: string): string => {
         hex = hex.replace(/^#/, '');
@@ -351,11 +367,23 @@ function AppearanceCard() {
 
 
     const handleColorChange = (hexColor: string) => {
+        setColor(hexColor);
         const hslColor = hexToHsl(hexColor);
         document.documentElement.style.setProperty('--primary', hslColor);
-        // Also update ring color for consistency
         document.documentElement.style.setProperty('--ring', hslColor);
-        toast({ title: 'Theme Updated', description: 'Primary color has been changed.' });
+    };
+
+    const handleSaveColor = async () => {
+        if (!settings) return;
+        setIsSaving(true);
+        try {
+            await updatePublicSettings({ ...settings, primaryColor: color });
+            toast({ title: 'Theme Updated', description: 'Primary color has been saved.' });
+        } catch (error: any) {
+            toast({ title: 'Error', description: `Failed to save color: ${error.message}`, variant: 'destructive' });
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -365,18 +393,26 @@ function AppearanceCard() {
                 <CardDescription>Customize the look and feel of the application.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div>
-                    <Label htmlFor="color-picker">Primary Color</Label>
-                    <p className="text-sm text-muted-foreground mb-2">Select a new primary color for the UI.</p>
-                    <Input 
-                      id="color-picker"
-                      type="color" 
-                      onChange={(e) => handleColorChange(e.target.value)}
-                      className="p-1 h-10 w-24"
-                      defaultValue="#ff6600"
-                    />
-                </div>
+                {isLoading ? <Skeleton className="h-10 w-24" /> : (
+                    <div>
+                        <Label htmlFor="color-picker">Primary Color</Label>
+                        <p className="text-sm text-muted-foreground mb-2">Select a new primary color for the UI.</p>
+                        <Input 
+                        id="color-picker"
+                        type="color" 
+                        onChange={(e) => handleColorChange(e.target.value)}
+                        className="p-1 h-10 w-24"
+                        value={color}
+                        />
+                    </div>
+                )}
             </CardContent>
+            <CardFooter>
+                <Button onClick={handleSaveColor} disabled={isSaving || isLoading}>
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save Color
+                </Button>
+            </CardFooter>
         </Card>
     );
 }
@@ -390,7 +426,7 @@ function DangerZoneCard() {
      React.useEffect(() => {
         setIsLoading(true);
         const unsubscribe = getMatches((matches) => {
-            const tournamentNames = [...new Set(matches.map(m => m.game))].sort();
+            const tournamentNames = [...new Set(matches.map(m => m.tournamentName))].sort();
             setTournaments(tournamentNames);
             setIsLoading(false);
         });

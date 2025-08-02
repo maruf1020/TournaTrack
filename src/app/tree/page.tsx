@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -6,7 +7,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import type { Match as DBMatch } from '@/lib/types';
-import { getMatches } from '@/lib/services';
+import { getMatchesOnce } from '@/lib/services';
 import { Loader2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { groupMatchesByRound } from '@/lib/bracket-utils';
 import { TournamentBracket } from '@/components/TournamentBracket';
@@ -34,28 +35,33 @@ export default function TournamentTreePage() {
   const [selectedTournamentName, setSelectedTournamentName] = React.useState<string | undefined>();
   
   React.useEffect(() => {
-    setLoading(true);
-    const unsubMatches = getMatches((matches) => {
-      setAllMatches(matches);
-      if (matches.length > 0) {
-        const tournamentNames = [...new Set(matches.filter(m => m.game).map(m => m.game))].sort();
-        if (tournamentNames.length > 0 && !selectedTournamentName) {
-            setSelectedTournamentName(tournamentNames[0]);
+    const loadMatches = async () => {
+        setLoading(true);
+        try {
+            const matches = await getMatchesOnce();
+            setAllMatches(matches);
+            if (matches.length > 0) {
+                const tournamentNames = [...new Set(matches.filter(m => m.tournamentName).map(m => m.tournamentName))].sort();
+                if (tournamentNames.length > 0 && !selectedTournamentName) {
+                    setSelectedTournamentName(tournamentNames[0]);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to load matches for tree view:", error);
+        } finally {
+            setLoading(false);
         }
-      }
-      setLoading(false);
-    });
-
-    return () => unsubMatches();
+    };
+    loadMatches();
   }, []);
   
   const tournamentNames = React.useMemo(() => {
-    return [...new Set(allMatches.filter(m => m.game).map(m => m.game))].sort();
+    return [...new Set(allMatches.filter(m => m.tournamentName).map(m => m.tournamentName))].sort();
   }, [allMatches]);
 
   const bracketRounds = React.useMemo(() => {
      if (!selectedTournamentName) return [];
-     const tournamentMatches = allMatches.filter(m => m.game === selectedTournamentName);
+     const tournamentMatches = allMatches.filter(m => m.tournamentName === selectedTournamentName);
      return groupMatchesByRound(tournamentMatches);
   }, [selectedTournamentName, allMatches]);
 
@@ -105,13 +111,16 @@ export default function TournamentTreePage() {
                     <React.Fragment>
                         <div className="flex items-center gap-2 p-2 border-b">
                             <Button variant="outline" size="sm" onClick={() => zoomIn()}>
-                                <ZoomIn className="h-4 w-4 mr-2" /> Zoom In
+                                <ZoomIn className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Zoom In</span>
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => zoomOut()}>
-                                <ZoomOut className="h-4 w-4 mr-2" /> Zoom Out
+                                <ZoomOut className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Zoom Out</span>
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => resetTransform()}>
-                                <RotateCcw className="h-4 w-4 mr-2" /> Reset
+                                <RotateCcw className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Reset</span>
                             </Button>
                         </div>
                         <div className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing">

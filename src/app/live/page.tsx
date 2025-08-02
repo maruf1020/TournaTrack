@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AppLayout from '@/components/layout/AppLayout';
 import { Gamepad2, Filter, Loader2 } from 'lucide-react';
-import { games, branches, departments } from '@/lib/placeholder-data';
+import { branches, departments } from '@/lib/placeholder-data';
 import { getMatches } from '@/lib/services';
 import type { Match, Player } from '@/lib/types';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -39,7 +39,7 @@ const MatchCard = ({ match }: { match: Match }) => {
         <div className="flex justify-between items-center mb-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Gamepad2 className="w-4 h-4" />
-            <span>{match.game}</span>
+            <span>{match.tournamentName}</span>
           </div>
           <StatusBadge status={match.status} className="animate-pulse" />
         </div>

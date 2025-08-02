@@ -43,6 +43,30 @@ export function getPlayers(callback: (players: Player[]) => void): () => void {
 }
 
 /**
+ * Fetches all players from the Firestore 'employees' collection once.
+ * @returns A promise that resolves with an array of players.
+ */
+export async function getPlayersOnce(): Promise<Player[]> {
+    try {
+        const employeesCollection = collection(db, 'employees');
+        const q = query(employeesCollection);
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+            return [];
+        }
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Player));
+    } catch (error) {
+        console.error("Error fetching players once:", error);
+        throw error;
+    }
+}
+
+
+/**
  * Adds a new player to the Firestore 'employees' collection.
  * @param playerData - The player data to add (excluding the ID).
  * @returns The newly created Player object with its Firestore ID.
@@ -144,7 +168,7 @@ export async function importEmployees(employees: EmployeeUploadData[]): Promise<
  * This can be a single match or all matches for a tournament.
  * @param newMatches An array of match objects to be added.
  */
-export async function addMatches(newMatches: Omit<Match, 'id' | 'date' | 'isDatePublished' | 'startTime' | 'endTime'>[]): Promise<void> {
+export async function addMatches(newMatches: Omit<Match, 'id' | 'date' | 'isDatePublished' | 'startTime' | 'endTime'>[], gameName: string, roundName: string, matchType: string): Promise<void> {
     const batch = writeBatch(db);
 
     newMatches.forEach(match => {
@@ -192,18 +216,41 @@ export function getMatches(callback: (matches: Match[]) => void): () => void {
     }
 }
 
+/**
+ * Fetches all matches from the Firestore 'matches' collection once.
+ * @returns A promise that resolves with an array of matches.
+ */
+export async function getMatchesOnce(): Promise<Match[]> {
+    try {
+        const matchesCollection = collection(db, 'matches');
+        const q = query(matchesCollection);
+        const snapshot = await getDocs(q);
 
-const findNextMatchForWinner = async (matchName: string, game: string): Promise<{ matchId: string, playerSlot: 'player1' | 'player2' } | null> => {
+        if (snapshot.empty) {
+            return [];
+        }
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Match));
+    } catch (error) {
+        console.error("Error fetching matches once:", error);
+        throw error;
+    }
+}
+
+
+const findNextMatchForWinner = async (matchName: string, tournamentName: string): Promise<{ matchId: string, playerSlot: 'player1' | 'player2' } | null> => {
     const matchesRef = collection(db, "matches");
     
     // Check if any match has this matchName as a placeholder
-    const q1 = query(matchesRef, where("player1Placeholder", "==", `Winner of ${matchName}`), where("game", "==", game));
+    const q1 = query(matchesRef, where("player1Placeholder", "==", `Winner of ${matchName}`), where("tournamentName", "==", tournamentName));
     const snapshot1 = await getDocs(q1);
     if (!snapshot1.empty) {
         return { matchId: snapshot1.docs[0].id, playerSlot: 'player1' };
     }
 
-    const q2 = query(matchesRef, where("player2Placeholder", "==", `Winner of ${matchName}`), where("game", "==", game));
+    const q2 = query(matchesRef, where("player2Placeholder", "==", `Winner of ${matchName}`), where("tournamentName", "==", tournamentName));
     const snapshot2 = await getDocs(q2);
     if (!snapshot2.empty) {
         return { matchId: snapshot2.docs[0].id, playerSlot: 'player2' };
@@ -228,7 +275,7 @@ export async function updateMatch(matchId: string, updatedData: Partial<Match>):
 
     const matchData = matchDoc.data() as Match;
 
-    const nextMatchInfo = await findNextMatchForWinner(matchData.matchName, matchData.game);
+    const nextMatchInfo = await findNextMatchForWinner(matchData.matchName, matchData.tournamentName);
     
     if (nextMatchInfo) {
       let winnerPlayers: Player[] = [];
@@ -271,7 +318,7 @@ export async function updateMatch(matchId: string, updatedData: Partial<Match>):
  */
 export async function deleteMatchesByTournament(tournamentName: string): Promise<void> {
     const matchesCollection = collection(db, 'matches');
-    const q = query(matchesCollection, where('game', '==', tournamentName));
+    const q = query(matchesCollection, where('tournamentName', '==', tournamentName));
     const matchesSnapshot = await getDocs(q);
     const batch = writeBatch(db);
 
@@ -297,17 +344,7 @@ export function getGames(callback: (games: Game[]) => void): () => void {
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (snapshot.empty) {
-        // Seed default games if the collection is empty
-        const defaultGames = [
-          { name: 'Football' }, { name: 'Carrom' }, { name: '8 Ball Pool' },
-          { name: 'Ludo' }, { name: 'Table Tennis' }, { name: 'PUBG' }, { name: 'Chess' }
-        ];
-        const batch = writeBatch(db);
-        defaultGames.forEach(game => {
-            const docRef = doc(collection(db, 'games'));
-            batch.set(docRef, game);
-        });
-        batch.commit().then(() => console.log('Default games seeded.'));
+        callback([]);
         return;
       }
       const games = snapshot.docs.map(doc => ({
@@ -322,6 +359,28 @@ export function getGames(callback: (games: Game[]) => void): () => void {
     console.error("Error fetching games in real-time:", error);
     throw error;
   }
+}
+
+/**
+ * Fetches all games from the Firestore 'games' collection once.
+ * @returns A promise that resolves with an array of games.
+ */
+export async function getGamesOnce(): Promise<Game[]> {
+    try {
+        const gamesCollection = collection(db, 'games');
+        const q = query(gamesCollection);
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            return [];
+        }
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Game));
+    } catch (error) {
+        console.error("Error fetching games once:", error);
+        throw error;
+    }
 }
 
 /**
@@ -373,6 +432,7 @@ export function getPublicSettings(callback: (settings: PublicSettings | null) =>
             cancelled: true,
           },
           allowBracketEditing: false,
+          primaryColor: '#ff6600',
         };
         setDoc(settingsDoc, defaultSettings).then(() => callback(defaultSettings));
       }

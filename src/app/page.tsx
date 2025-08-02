@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -42,7 +43,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import { currentUser, branches as allBranches } from '@/lib/placeholder-data';
 import { cn } from '@/lib/utils';
 import type { Match, Player } from '@/lib/types';
-import { getPlayers, getMatches } from '@/lib/services';
+import { getPlayersOnce, getMatchesOnce } from '@/lib/services';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import Link from 'next/link';
@@ -128,7 +129,7 @@ function MatchListCard({ title, icon: Icon, matches, emptyText }: { title: strin
                             return (
                                 <div key={match.id} className="p-3 rounded-md bg-muted/50 space-y-2">
                                     <div className="flex items-center justify-between text-sm">
-                                        <p className="font-semibold">{match.game} <span className="font-normal text-muted-foreground">({match.matchType || 'N/A'})</span></p>
+                                        <p className="font-semibold">{match.tournamentName} <span className="font-normal text-muted-foreground">({match.matchType || 'N/A'})</span></p>
                                         {formattedDate ? (
                                             <div className="font-medium">{formattedDate}</div>
                                         ) : (
@@ -187,20 +188,29 @@ export default function Dashboard() {
   const [now, setNow] = React.useState<Date | null>(null);
 
   React.useEffect(() => {
-    setLoading(true);
-    const unsubPlayers = getPlayers(setPlayers);
-    const unsubMatches = getMatches((matchData) => {
-        setMatches(matchData);
-        setLoading(false); // Set loading to false only after matches are loaded
-    });
+    async function loadData() {
+        setLoading(true);
+        try {
+            const [playerData, matchData] = await Promise.all([
+                getPlayersOnce(),
+                getMatchesOnce(),
+            ]);
+            setPlayers(playerData);
+            setMatches(matchData);
+        } catch (error) {
+            console.error("Failed to load dashboard data:", error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    loadData();
     
     setNow(new Date());
     // Update the current time every 30 seconds to check for live matches
     const interval = setInterval(() => setNow(new Date()), 30000);
 
     return () => {
-        unsubPlayers();
-        unsubMatches();
         clearInterval(interval);
     };
   }, []);
@@ -225,9 +235,9 @@ export default function Dashboard() {
     [selectedBranch, matches]
   );
   
-  const totalGames = React.useMemo(() => {
-    const games = new Set(filteredMatches.map(m => m.game));
-    return games.size;
+  const totalTournaments = React.useMemo(() => {
+    const tournaments = new Set(filteredMatches.map(m => m.tournamentName));
+    return tournaments.size;
   }, [filteredMatches]);
 
   const isMatchLive = (match: Match): boolean => {
@@ -374,11 +384,11 @@ export default function Dashboard() {
            <Link href="/matches">
             <Card className="hover:bg-muted">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Games</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Tournaments</CardTitle>
                 <Gamepad2 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{totalGames}</div>
+                <div className="text-2xl font-bold">{totalTournaments}</div>
                 <p className="text-xs text-muted-foreground">
                   in {selectedBranch === 'all' ? 'all branches' : selectedBranch}
                 </p>

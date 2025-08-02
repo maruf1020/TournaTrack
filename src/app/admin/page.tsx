@@ -92,7 +92,7 @@ function AdminContent({ activeTab, onMatchesCreated }: { activeTab: AdminTab, on
         }
 
         return {
-            'Tournament Name': match.game,
+            'Tournament Name': match.tournamentName,
             'Match Name': match.matchName,
             'Match Type': match.matchType,
             'Team/Player 1': team1,
@@ -153,12 +153,12 @@ function AdminContent({ activeTab, onMatchesCreated }: { activeTab: AdminTab, on
     case 'manage':
       return (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="font-headline">Manage Matches</CardTitle>
-              <CardDescription>View all matches, assign winners, and advance players to the next round.</CardDescription>
+          <CardHeader>
+            <div className="w-full">
+                <CardTitle className="font-headline">Manage Matches</CardTitle>
+                <CardDescription>View all matches, assign winners, and advance players to the next round.</CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 pt-4">
                <Button variant="outline" onClick={handleExportJson} disabled={filteredMatches.length === 0}>
                   <Download className="mr-2 h-4 w-4" />
                   Export JSON
@@ -182,7 +182,7 @@ function AdminContent({ activeTab, onMatchesCreated }: { activeTab: AdminTab, on
 export default function AdminPage() {
   const { user, isAdmin, loading } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = React.useState<AdminTab>('create');
+  const [activeTab, setActiveTab] = React.useState<AdminTab>('manage');
   const [key, setKey] = React.useState(0); // Used to force re-render of ManageMatches
 
   React.useEffect(() => {
@@ -224,8 +224,8 @@ export default function AdminPage() {
   }
 
   const menuItems = [
-    { id: 'create', label: 'Create Tournament', icon: Sword },
     { id: 'manage', label: 'Manage Matches', icon: ListChecks },
+    { id: 'create', label: 'Create Tournament', icon: Sword },
     { id: 'employees', label: 'Manage Employees', icon: Users },
   ];
 

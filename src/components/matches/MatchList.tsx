@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -6,14 +7,13 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Trophy, Loader2, Filter, Calendar as CalendarIcon, Pencil, Trash2, Download } from 'lucide-react';
 import type { Match, Player, Game, PublicSettings } from '@/lib/types';
-import { getMatches, updateMatch, getPublicSettings } from '@/lib/services';
+import { getMatchesOnce, updateMatch, getPublicSettings } from '@/lib/services';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,6 +27,8 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '../ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useAuth } from '@/hooks/use-auth';
+import { useSortableTable } from '@/hooks/use-sortable-table';
+import { SortableTableHeader } from '@/components/ui/sortable-table-header';
 
 
 function EditMatchDialog({ match, onUpdate, open, onOpenChange }: { match: Match | null, onUpdate: (match: Match) => void, open: boolean, onOpenChange: (open: boolean) => void }) {
@@ -59,9 +61,9 @@ function EditMatchDialog({ match, onUpdate, open, onOpenChange }: { match: Match
         }
     }, [match]);
 
-    if (!match) return null;
-
     const handleSave = async () => {
+        if (!match) return;
+
         const updatedMatchData: Partial<Match> = {
             date: date || null,
             startTime,
@@ -86,10 +88,13 @@ function EditMatchDialog({ match, onUpdate, open, onOpenChange }: { match: Match
         }
     };
     
+    if (!match) return null;
+
     const allPlayersInMatch = [...(match.allPlayers || []), ...match.player1, ...match.player2].filter(p => p.id);
 
     const getPlayerNames = (players: Player[], placeholder?: string) => {
       if (placeholder && (!players || players.length === 0)) return placeholder;
+      if (!players || players.length === 0) return "TBD";
       return players.map(p => p.name).join(' & ');
     }
 
@@ -238,6 +243,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
   const [loading, setLoading] = React.useState(true);
   const [editingMatch, setEditingMatch] = React.useState<Match | null>(null);
   const { user, isAdmin: authIsAdmin, loading: authLoading } = useAuth();
+  const { toast } = useToast();
 
   const [filters, setFilters] = React.useState({
     search: '',
@@ -247,32 +253,37 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
     matchType: 'all',
     status: 'all',
   });
+  
+  const { sortedData: sortedMatches, requestSort, getSortDirection } = useSortableTable(matchList, {
+    initialSort: [{ key: 'date', direction: 'desc' }]
+  });
 
   React.useEffect(() => {
-    setLoading(true);
-    const unsubMatches = getMatches((matches) => {
-        const sortedMatches = matches.sort((a, b) => {
-            const dateA = a.date ? (a.date as any).toDate ? (a.date as any).toDate() : new Date(a.date) : null;
-            const dateB = b.date ? (b.date as any).toDate ? (b.date as any).toDate() : new Date(b.date) : null;
-            if (dateA && dateB) return dateB.getTime() - dateA.getTime();
-            if (dateA) return -1;
-            if (dateB) return 1;
-            return 0;
-        });
-        setMatchList(sortedMatches);
-        setLoading(false);
-    });
-    
-    if (!isAdmin) {
-        const unsubSettings = getPublicSettings(setPublicSettings);
-        return () => {
-            unsubMatches();
-            unsubSettings();
+    async function loadData() {
+        setLoading(true);
+        try {
+            const [matches, settings] = await Promise.all([
+                getMatchesOnce(),
+                !isAdmin ? new Promise<PublicSettings | null>((resolve) => {
+                    const unsub = getPublicSettings((s) => {
+                        resolve(s);
+                        unsub();
+                    });
+                }) : Promise.resolve(null)
+            ]);
+            setMatchList(matches);
+            if (settings) {
+                setPublicSettings(settings);
+            }
+        } catch (error) {
+            toast({ title: 'Error', description: 'Failed to load match data.', variant: 'destructive' });
+            console.error(error);
+        } finally {
+            setLoading(false);
         }
     }
-
-    return () => unsubMatches();
-  }, [isAdmin]);
+    loadData();
+  }, [isAdmin, toast]);
 
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
@@ -280,7 +291,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
   };
 
   const filteredMatches = React.useMemo(() => {
-    let matches = matchList;
+    let matches = sortedMatches;
 
     if (!isAdmin && publicSettings) {
         matches = matches.filter(m => publicSettings.visibleStatuses[m.status] ?? true);
@@ -310,7 +321,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
 
         return nameMatch && branchMatch && departmentMatch && gameMatch && matchTypeMatch && statusMatch;
     });
-  }, [matchList, filters, isAdmin, publicSettings]);
+  }, [sortedMatches, filters, isAdmin, publicSettings]);
   
   React.useEffect(() => {
     if(onFilteredMatchesChange) {
@@ -423,13 +434,41 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
         <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
-                <TableHead>Tournament Name</TableHead>
-                <TableHead>Match Name</TableHead>
-                <TableHead>Players</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Winner</TableHead>
-                {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                 <SortableTableHeader
+                    label="Tournament"
+                    sortKey="tournamentName"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                 <SortableTableHeader
+                    label="Match"
+                    sortKey="matchName"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                 <SortableTableHeader
+                    label="Players"
+                    isSortable={false}
+                />
+                <SortableTableHeader
+                    label="Date"
+                    sortKey="date"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                <SortableTableHeader
+                    label="Status"
+                    sortKey="status"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                <SortableTableHeader
+                    label="Winner"
+                    sortKey="winnerId"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                {isAdmin && <SortableTableHeader label="Actions" className="text-right" isSortable={false} />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -447,7 +486,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
                 }
                 return (
                 <TableRow key={match.id} className="odd:bg-muted/10">
-                  <TableCell className="font-medium whitespace-nowrap">{match.game} <span className="text-muted-foreground text-xs">({match.matchType})</span></TableCell>
+                  <TableCell className="font-medium whitespace-nowrap">{match.tournamentName} <span className="text-muted-foreground text-xs">({match.game})</span></TableCell>
                   <TableCell className="whitespace-nowrap">{match.matchName}</TableCell>
                   <TableCell>
                    {match.allPlayers && match.allPlayers.length > 0 ? `Battle Royale (${match.allPlayers.length} players)` : (
@@ -495,7 +534,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
               open={!!editingMatch}
               onOpenChange={(open) => !open && setEditingMatch(null)}
               onUpdate={(updatedMatch) => {
-                  // The onSnapshot listener will handle the update automatically.
+                  setMatchList(prev => prev.map(m => m.id === updatedMatch.id ? updatedMatch : m));
                   setEditingMatch(null);
               }}
           />
@@ -503,5 +542,3 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
     </div>
   );
 }
-
-    

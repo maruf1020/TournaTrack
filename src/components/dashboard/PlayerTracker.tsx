@@ -72,7 +72,7 @@ function MatchRow({ match, selectedPlayerId }: { match: Match; selectedPlayerId:
     return (
         <div className="p-3 rounded-md bg-muted/50 space-y-2">
             <div className="flex items-center justify-between text-sm">
-                <p className="font-semibold">{match.game} <span className="font-normal text-muted-foreground">({match.matchType})</span></p>
+                <p className="font-semibold">{match.tournamentName} <span className="font-normal text-muted-foreground">({match.matchType})</span></p>
                 <div className="flex items-center gap-2">
                      <span className={cn(
                         'font-semibold text-xs uppercase px-2 py-0.5 rounded-full',
@@ -200,16 +200,18 @@ export default function PlayerTracker({ allPlayers, allMatches }: { allPlayers: 
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-            <CardTitle className="flex items-center gap-2"><User /> {selectedPlayer.name}'s Matches</CardTitle>
-            <CardDescription>A summary of all upcoming and past matches for the selected player.</CardDescription>
-        </div>
-        <Button variant="outline" size="sm" onClick={clearSelection}>
-            <Edit2 className="mr-2 h-4 w-4"/>
-            Change Player
-        </Button>
-      </CardHeader>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <CardTitle className="flex items-center gap-2"><User /> {selectedPlayer.name}'s Matches</CardTitle>
+                <CardDescription>A summary of all upcoming and past matches for the selected player.</CardDescription>
+            </div>
+            <div className="w-full sm:w-auto flex justify-start sm:justify-end">
+                <Button variant="outline" size="sm" onClick={clearSelection}>
+                    <Edit2 className="mr-2 h-4 w-4"/>
+                    Change Player
+                </Button>
+            </div>
+        </CardHeader>
       <CardContent>
         {playerMatches.length > 0 ? (
             <ScrollArea className="h-96 pr-4">

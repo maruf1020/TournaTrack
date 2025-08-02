@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -11,7 +12,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
@@ -41,6 +41,9 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { useSortableTable } from '@/hooks/use-sortable-table';
+import { SortableTableHeader } from '@/components/ui/sortable-table-header';
+
 
 const employeeSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -160,7 +163,7 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
               {errors.joiningDate && <p className="text-sm text-destructive">{errors.joiningDate.message}</p>}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <DialogClose asChild>
               <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
             </DialogClose>
@@ -185,6 +188,8 @@ export default function EmployeeManager() {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  
+  const { sortedData, requestSort, getSortDirection } = useSortableTable(employees);
 
   React.useEffect(() => {
     setIsLoading(true);
@@ -264,15 +269,15 @@ export default function EmployeeManager() {
 
   return (
     <div className="space-y-6">
-       <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium">Employee Directory</h3>
-            <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" onClick={triggerFileUpload} disabled={isImporting}>
+       <div className="flex flex-col gap-4">
+            <h3 className="text-lg font-medium w-full">Employee Directory</h3>
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+                <Button className="w-full sm:w-auto" type="button" variant="outline" onClick={triggerFileUpload} disabled={isImporting}>
                     {isImporting ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileJson className="mr-2 h-4 w-4" />}
                     {isImporting ? 'Importing...' : 'Import JSON'}
                 </Button>
-                <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={handleFileUpload}/>
-                <Button onClick={handleAddNew}>
+                <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={handleFileUpload} />
+                <Button className="w-full sm:w-auto" onClick={handleAddNew}>
                   <UserPlus className="mr-2 h-4 w-4" /> Add New Employee
                 </Button>
             </div>
@@ -291,15 +296,39 @@ export default function EmployeeManager() {
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Branch</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <SortableTableHeader
+                    label="Name"
+                    sortKey="name"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                 <SortableTableHeader
+                    label="Email"
+                    sortKey="email"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                 <SortableTableHeader
+                    label="Branch"
+                    sortKey="branch"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                 <SortableTableHeader
+                    label="Department"
+                    sortKey="department"
+                    requestSort={requestSort}
+                    getSortDirection={getSortDirection}
+                />
+                <SortableTableHeader
+                    label="Actions"
+                    className="text-right"
+                    isSortable={false}
+                />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees.length > 0 ? employees.map((employee) => (
+              {sortedData.length > 0 ? sortedData.map((employee) => (
                 <TableRow key={employee.id} className="odd:bg-muted/10">
                   <TableCell className="font-medium">{employee.name}</TableCell>
                   <TableCell>{employee.email}</TableCell>
@@ -347,3 +376,5 @@ export default function EmployeeManager() {
     </div>
   );
 }
+
+    

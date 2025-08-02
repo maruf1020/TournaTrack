@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -10,10 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { getPlayers, addMatches, getPublicSettings } from '@/lib/services';
+import { getPlayersOnce, addMatches, getPublicSettings, getGamesOnce } from '@/lib/services';
 import { branches } from '@/lib/placeholder-data';
-import type { Player, Match, PublicSettings } from '@/lib/types';
-import { Loader2, Shuffle, Users, Sword, UserCheck, GitBranch } from 'lucide-react';
+import type { Player, Match, PublicSettings, Game } from '@/lib/types';
+import { Loader2, Shuffle, Users, Sword, UserCheck, GitBranch, Gamepad2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
@@ -22,6 +23,7 @@ import { ScrollArea } from '../ui/scroll-area';
 
 const createMatchesSchema = z.object({
   branch: z.array(z.string()).min(1, 'Please select at least one branch.'),
+  gameId: z.string().min(1, 'Please select a game.'),
   tournamentName: z.string().min(3, 'Tournament name must be at least 3 characters.'),
   numPlayers: z.string(),
   matchType: z.string().min(1, 'Please select a match type.'),
@@ -142,8 +144,9 @@ function PlayerSelectionDialog({
           <ScrollArea className="h-60 rounded-md border p-2">
             <div className="space-y-2">
               {filteredPlayers.map(player => (
-                <Label key={player.id} className="flex items-center gap-2 font-normal">
+                <Label key={player.id} className="flex items-center gap-3 font-normal text-base">
                   <Checkbox
+                    className="h-4 w-4"
                     checked={internalSelection.includes(player.id)}
                     onCheckedChange={() => handleTogglePlayer(player.id)}
                   />
@@ -153,7 +156,7 @@ function PlayerSelectionDialog({
             </div>
           </ScrollArea>
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
@@ -166,6 +169,7 @@ function PlayerSelectionDialog({
 
 export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: () => void }) {
   const [players, setPlayers] = React.useState<Player[]>([]);
+  const [games, setGames] = React.useState<Game[]>([]);
   const [generatedTournament, setGeneratedTournament] = React.useState<GeneratedMatch[][]>([]);
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
@@ -179,6 +183,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
     resolver: zodResolver(createMatchesSchema),
     defaultValues: {
         branch: [],
+        gameId: "",
         tournamentName: "",
         numPlayers: "0",
         matchType: ""
@@ -192,13 +197,29 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
   const numPlayers = parseInt(numPlayersRaw || '0', 10);
   
   React.useEffect(() => {
-    const unsubPlayers = getPlayers(setPlayers);
+    async function loadData() {
+        try {
+            const [playerData, gameData] = await Promise.all([
+                getPlayersOnce(),
+                getGamesOnce()
+            ]);
+            setPlayers(playerData);
+            setGames(gameData);
+        } catch (error) {
+            toast({
+                title: 'Error loading data',
+                description: 'Could not fetch players or games.',
+                variant: 'destructive',
+            });
+        }
+    }
+    loadData();
+
     const unsubSettings = getPublicSettings(setSettings);
     return () => {
-        unsubPlayers();
         unsubSettings();
     }
-  }, []);
+  }, [toast]);
 
   const playersInSelectedBranches = React.useMemo(() => {
     if (!selectedBranches || selectedBranches.length === 0) return [];
@@ -245,6 +266,13 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
     }
     
     const selectedPlayers = players.filter(p => selectedPlayerIds.includes(p.id));
+    const selectedGame = games.find(g => g.id === data.gameId);
+
+    if (!selectedGame) {
+         toast({ title: 'Game not found', description: 'Please select a valid game.', variant: 'destructive' });
+         setIsGenerating(false);
+         return;
+    }
 
     if (data.matchType === 'Battle Royale') {
         if (selectedPlayers.length < 2) {
@@ -253,8 +281,9 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
             return;
         }
         const battleRoyaleMatch: GeneratedMatch = {
-            game: data.tournamentName,
-            matchName: `Final - Match 1`,
+            tournamentName: data.tournamentName,
+            game: selectedGame.name,
+            matchName: `${data.tournamentName} - Final`,
             matchType: 'Battle Royale',
             player1: [], player2: [],
             allPlayers: selectedPlayers,
@@ -292,7 +321,8 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
         const round1Matches: GeneratedMatch[] = [];
         for (let i = 0; i < numTeams / 2; i++) {
             const match: GeneratedMatch = {
-                game: data.tournamentName,
+                tournamentName: data.tournamentName,
+                game: selectedGame.name,
                 matchName: `${getRoundName(0, totalRounds)} - Match ${i + 1}`,
                 matchType: data.matchType,
                 player1: teams[i * 2],
@@ -312,7 +342,8 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
             const roundName = getRoundName(roundIndex, totalRounds);
             for (let i = 0; i < previousRoundMatches.length / 2; i++) {
                 const match: GeneratedMatch = {
-                    game: data.tournamentName,
+                    tournamentName: data.tournamentName,
+                    game: selectedGame.name,
                     matchName: `${roundName} - Match ${i + 1}`,
                     matchType: data.matchType,
                     player1: [],
@@ -370,7 +401,10 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
     setIsCreating(true);
     try {
       const allMatches = generatedTournament.flat();
-      await addMatches(allMatches);
+      const gameInfo = games.find(g => g.id === watch('gameId'));
+      if (!gameInfo) throw new Error("Selected game not found.");
+      
+      await addMatches(allMatches, gameInfo.name, tournamentName, matchType);
       toast({
         title: 'Tournament Created!',
         description: `${allMatches.length} matches across ${generatedTournament.length} rounds have been created.`
@@ -382,6 +416,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
       setValue('branch', []);
       setValue('numPlayers', '0');
       setValue('matchType', '');
+      setValue('gameId', '');
     } catch (error: any) {
       toast({
         title: 'Error Creating Tournament',
@@ -407,7 +442,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit(onGenerateTournament)} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="space-y-2">
                  <Label>Branches</Label>
                  <Controller
@@ -431,8 +466,9 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
                                 />
                                 <ScrollArea className="max-h-40">
                                   {filteredBranches.map(branch => (
-                                      <Label key={branch} className="flex items-center gap-2 font-normal p-1">
+                                      <Label key={branch} className="flex items-center gap-3 font-normal text-lg">
                                           <Checkbox
+                                              className="h-4 w-4"
                                               checked={field.value?.includes(branch)}
                                               onCheckedChange={(checked) => {
                                                   const newValue = checked
@@ -451,6 +487,32 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
                     )}
                  />
                  {errors.branch && <p className="text-sm text-destructive">{errors.branch.message}</p>}
+            </div>
+             <div className="space-y-2">
+                <Label htmlFor="gameId">Game Name</Label>
+                <Controller
+                    name="gameId"
+                    control={control}
+                    render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger id="gameId">
+                                <SelectValue placeholder="Select a game" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {games.length > 0 ? (
+                                    games.map((game) => (
+                                        <SelectItem key={game.id} value={game.id}>
+                                            {game.name}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <SelectItem value="none" disabled>No games found</SelectItem>
+                                )}
+                            </SelectContent>
+                        </Select>
+                    )}
+                />
+                {errors.gameId && <p className="text-sm text-destructive">{errors.gameId.message}</p>}
             </div>
              <div className="space-y-2">
                 <Label htmlFor="tournamentName">Tournament Name</Label>
@@ -504,12 +566,12 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
             </div>
         </div>
         
-        <div className="flex items-center gap-4">
-            <Button type="button" variant="outline" onClick={() => setIsPlayerSelectionOpen(true)} disabled={!selectedBranches || selectedBranches.length === 0 || (matchType !== 'Battle Royale' && numPlayersRaw === '0') || !matchType}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setIsPlayerSelectionOpen(true)} disabled={!selectedBranches || selectedBranches.length === 0 || (matchType !== 'Battle Royale' && numPlayersRaw === '0') || !matchType}>
                 <UserCheck className="mr-2 h-4 w-4" />
                 Select Players ({selectedPlayerIds.length})
             </Button>
-            <Button type="submit" disabled={isGenerating}>
+            <Button type="submit" disabled={isGenerating} className="w-full sm:w-auto">
               {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shuffle className="mr-2 h-4 w-4" />}
               Generate Tournament
             </Button>

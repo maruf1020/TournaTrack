@@ -27,8 +27,9 @@ export type Matchup = {
 
 export type Match = {
   id:string;
-  game: string;
-  matchName: string;
+  tournamentName: string; // e.g. "Dhanmondi Carrom Championship 2024"
+  game: string; // e.g. "Carrom"
+  matchName: string; // e.g. "Round 1 - Match 1"
   matchType: string;
   player1: Player[]; // Now an array to support teams
   player2: Player[]; // Now an array to support teams
@@ -77,6 +78,7 @@ export type PublicSettings = {
     [key in Match['status']]: boolean;
   };
   allowBracketEditing: boolean;
+  primaryColor?: string;
 };
 
 
@@ -102,5 +104,3 @@ export const SuggestMatchupsOutputSchema = z.object({
   matchups: z.array(MatchupSchema).describe('An array of suggested matchups.'),
 });
 export type SuggestMatchupsOutput = z.infer<typeof SuggestMatchupsOutputSchema>;
-
-    

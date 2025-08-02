@@ -7,15 +7,11 @@
 
 import type { Player, Game, Match, Round, Tournament } from './types';
 
+// This is intentionally left empty. Games are now managed in the database via the Settings page.
 export const games: Game[] = [
-  { id: '1', name: 'Football' },
-  { id: '2', name: 'Carrom' },
-  { id: '3', name: '8 Ball Pool' },
-  { id: '4', name: 'Ludo' },
-  { id: '5', name: 'Table Tennis' },
-  { id: '6', name: 'PUBG' },
-  { id: '7', name: 'Chess' },
+  { id: '1', name: 'Test Game' }  
 ];
+
 
 export const branches: string[] = ['Dhanmondi', 'Uttara', 'Chittagong'];
 export const departments: string[] = [ 'Development', 'Quality Assurance', 'UI/UX Design', 'Management', 'Human Resources', 'Accounting', 'Staff'];
