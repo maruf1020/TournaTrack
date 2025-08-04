@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -14,9 +14,10 @@ import {
   TableCell,
   TableHeader,
   TableRow,
+  TableHead,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, UserPlus, FileJson, Loader2, Pencil } from 'lucide-react';
+import { Trash2, UserPlus, FileJson, Loader2, Pencil, CheckCircle2, Info } from 'lucide-react';
 import { getPlayers, addPlayer, removePlayer, importEmployees, updatePlayer } from '@/lib/services';
 import type { Player, EmployeeUploadData } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
@@ -41,8 +42,13 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSortableTable } from '@/hooks/use-sortable-table';
 import { SortableTableHeader } from '@/components/ui/sortable-table-header';
+import { Skeleton } from '../ui/skeleton';
+import { Switch } from '../ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { branches, departments } from '@/lib/placeholder-data';
 
 
 const employeeSchema = z.object({
@@ -53,6 +59,8 @@ const employeeSchema = z.object({
   designation: z.string().min(1, 'Designation is required.'),
   employeeId: z.string().min(1, 'Employee ID is required.'),
   joiningDate: z.string().min(1, 'Joining date is required.'),
+  imageUrl: z.string().url('Please enter a valid URL.').or(z.literal('')),
+  isAdmin: z.boolean().default(false),
 });
 
 type EmployeeFormInputs = z.infer<typeof employeeSchema>;
@@ -71,8 +79,19 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
   
   const isEditMode = !!employeeToEdit;
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<EmployeeFormInputs>({
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<EmployeeFormInputs>({
     resolver: zodResolver(employeeSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      branch: '',
+      department: '',
+      designation: '',
+      employeeId: '',
+      joiningDate: '',
+      imageUrl: '',
+      isAdmin: false
+    }
   });
   
   React.useEffect(() => {
@@ -80,10 +99,12 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
         reset({
             ...employeeToEdit,
             joiningDate: employeeToEdit.joiningDate ? new Date(employeeToEdit.joiningDate).toISOString().split('T')[0] : '',
+            imageUrl: employeeToEdit.imageUrl || '',
+            isAdmin: employeeToEdit.isAdmin || false,
         });
     } else {
         reset({
-            name: '', email: '', branch: '', department: '', designation: '', employeeId: '', joiningDate: ''
+            name: '', email: '', branch: '', department: '', designation: '', employeeId: '', joiningDate: '', imageUrl: '', isAdmin: false
         });
     }
   }, [employeeToEdit, reset]);
@@ -96,13 +117,16 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
     }
     setIsSubmitting(true);
     try {
+      const playerData: Partial<Player> = {
+        ...data,
+        imageUrl: data.imageUrl || `https://placehold.co/100x100.png`
+      }
         if (isEditMode && employeeToEdit) {
-            await updatePlayer(employeeToEdit.id, data);
+            await updatePlayer(employeeToEdit.id, playerData);
             toast({ title: 'Employee Updated', description: `${data.name}'s information has been updated.` });
             onEmployeeUpdated();
         } else {
-            const playerData: Omit<Player, 'id' | 'isAdmin'> = { ...data, imageUrl: `https://placehold.co/100x100.png` };
-            await addPlayer({ ...playerData, isAdmin: false });
+            await addPlayer(playerData as Omit<Player, 'id'>);
             toast({ title: 'Employee Added', description: `${data.name} has been added.` });
             onEmployeeAdded();
         }
@@ -157,10 +181,29 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
               <Input id="designation" {...register('designation')} />
               {errors.designation && <p className="text-sm text-destructive">{errors.designation.message}</p>}
             </div>
-            <div className="space-y-2 col-span-full">
+            <div className="space-y-2">
               <Label htmlFor="joiningDate">Joining Date</Label>
               <Input id="joiningDate" type="date" {...register('joiningDate')} />
               {errors.joiningDate && <p className="text-sm text-destructive">{errors.joiningDate.message}</p>}
+            </div>
+             <div className="space-y-2">
+                <Label htmlFor="imageUrl">Image URL</Label>
+                <Input id="imageUrl" placeholder="https://placehold.co/100x100.png" {...register('imageUrl')} />
+                {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
+            </div>
+            <div className="flex items-center space-x-2 pt-6">
+                <Controller
+                    control={control}
+                    name="isAdmin"
+                    render={({ field }) => (
+                      <Switch
+                          id="isAdmin"
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                      />
+                    )}
+                />
+                <Label htmlFor="isAdmin">Is Admin?</Label>
             </div>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -177,6 +220,72 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
   );
 }
 
+const TableSkeleton = () => (
+    <div className="rounded-md border">
+        <Table>
+            <TableHeader className="bg-muted/50">
+                <TableRow>
+                    <TableHead><Skeleton className="h-5 w-20" /></TableHead>
+                    <TableHead><Skeleton className="h-5 w-32" /></TableHead>
+                    <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+                    <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+                    <TableHead><Skeleton className="h-5 w-16" /></TableHead>
+                    <TableHead className="text-right"><Skeleton className="h-5 w-16" /></TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {[...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                        <TableCell className="text-right flex justify-end gap-2">
+                            <Skeleton className="h-8 w-8" />
+                            <Skeleton className="h-8 w-8" />
+                        </TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
+    </div>
+);
+
+const JsonFormatPopover = () => (
+    <Popover>
+        <PopoverTrigger asChild>
+             <Button variant="ghost" size="icon" className="h-7 w-7">
+                <Info className="h-4 w-4" />
+            </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80">
+            <div className="grid gap-4">
+                <div className="space-y-2">
+                    <h4 className="font-medium leading-none">JSON Import Format</h4>
+                    <p className="text-sm text-muted-foreground">
+                       Your JSON file must be an array of objects with the following structure.
+                       The `imageUrl` and `id` fields are optional.
+                    </p>
+                </div>
+                <pre className="text-xs p-2 bg-muted rounded-md overflow-x-auto">
+{`[
+  {
+    "employeeId": "EMP-001",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "joiningDate": "2023-01-15T00:00:00.000Z",
+    "designation": "Software Engineer",
+    "branch": "Dhanmondi",
+    "department": "Development",
+    "imageUrl": "https://example.com/image.png"
+  }
+]`}
+                </pre>
+            </div>
+        </PopoverContent>
+    </Popover>
+);
 
 export default function EmployeeManager() {
   const [employees, setEmployees] = React.useState<Player[]>([]);
@@ -188,8 +297,38 @@ export default function EmployeeManager() {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const [filters, setFilters] = React.useState({
+    search: '',
+    branch: 'all',
+    department: 'all',
+    designation: 'all',
+  });
+
+  const handleFilterChange = (key: keyof typeof filters, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
   
-  const { sortedData, requestSort, getSortDirection } = useSortableTable(employees);
+  const allDesignations = React.useMemo(() => {
+    const designations = new Set<string>();
+    employees.forEach(e => e.designation && designations.add(e.designation));
+    return Array.from(designations).sort();
+  }, [employees]);
+
+  const filteredEmployees = React.useMemo(() => {
+    return employees.filter(employee => {
+        const searchLower = filters.search.toLowerCase();
+        const nameMatch = employee.name.toLowerCase().includes(searchLower);
+        const emailMatch = employee.email.toLowerCase().includes(searchLower);
+        const branchMatch = filters.branch === 'all' || employee.branch === filters.branch;
+        const departmentMatch = filters.department === 'all' || employee.department === filters.department;
+        const designationMatch = filters.designation === 'all' || employee.designation === filters.designation;
+
+        return (nameMatch || emailMatch) && branchMatch && departmentMatch && designationMatch;
+    });
+  }, [employees, filters]);
+  
+  const { sortedData, requestSort, getSortDirection } = useSortableTable(filteredEmployees);
 
   React.useEffect(() => {
     setIsLoading(true);
@@ -218,7 +357,6 @@ export default function EmployeeManager() {
     try {
       await removePlayer(id);
       toast({ title: 'Employee Removed', description: 'Employee has been removed from Firestore.', variant: 'destructive' });
-      // Real-time listener will update the state automatically
     } catch (error: any) {
       toast({ title: 'Error', description: `Failed to remove employee: ${error.message}`, variant: 'destructive' });
     }
@@ -240,7 +378,6 @@ export default function EmployeeManager() {
 
       if (result.success) {
         toast({ title: "Import Successful", description: `${result.count} new employees imported.` });
-        // Real-time listener will update the state
       } else {
         throw new Error(result.error || "An unknown error occurred during import.");
       }
@@ -258,28 +395,54 @@ export default function EmployeeManager() {
     fileInputRef.current?.click();
   };
   
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2">Loading Employees...</span>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
        <div className="flex flex-col gap-4">
-            <h3 className="text-lg font-medium w-full">Employee Directory</h3>
-            <div className="flex flex-col sm:flex-row items-center gap-2">
-                <Button className="w-full sm:w-auto" type="button" variant="outline" onClick={triggerFileUpload} disabled={isImporting}>
-                    {isImporting ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileJson className="mr-2 h-4 w-4" />}
-                    {isImporting ? 'Importing...' : 'Import JSON'}
-                </Button>
-                <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={handleFileUpload} />
-                <Button className="w-full sm:w-auto" onClick={handleAddNew}>
-                  <UserPlus className="mr-2 h-4 w-4" /> Add New Employee
-                </Button>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <h3 className="text-lg font-medium">Employee Directory ({filteredEmployees.length})</h3>
+                <div className="flex items-center gap-2">
+                   <div className="flex items-center">
+                     <Button className="w-full sm:w-auto" type="button" variant="outline" onClick={triggerFileUpload} disabled={isImporting}>
+                        {isImporting ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : <FileJson className="mr-2 h-4 w-4" />}
+                        {isImporting ? 'Importing...' : 'Import JSON'}
+                     </Button>
+                     <JsonFormatPopover />
+                   </div>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={handleFileUpload} />
+                    <Button className="w-full sm:w-auto" onClick={handleAddNew}>
+                      <UserPlus className="mr-2 h-4 w-4" /> Add New Employee
+                    </Button>
+                </div>
+            </div>
+            <div className="p-4 border rounded-lg bg-card space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <Input 
+                        placeholder="Search name or email..."
+                        value={filters.search}
+                        onChange={e => handleFilterChange('search', e.target.value)}
+                    />
+                     <Select value={filters.branch} onValueChange={value => handleFilterChange('branch', value)}>
+                        <SelectTrigger><SelectValue placeholder="All Branches" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Branches</SelectItem>
+                            {branches.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={filters.department} onValueChange={value => handleFilterChange('department', value)}>
+                        <SelectTrigger><SelectValue placeholder="All Departments"/></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Departments</SelectItem>
+                            {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                     <Select value={filters.designation} onValueChange={value => handleFilterChange('designation', value)}>
+                        <SelectTrigger><SelectValue placeholder="All Designations"/></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Designations</SelectItem>
+                            {allDesignations.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
         </div>
       
@@ -291,90 +454,99 @@ export default function EmployeeManager() {
           onOpenChange={setIsFormOpen}
        />
 
-      <div className="rounded-md border">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <SortableTableHeader
-                    label="Name"
-                    sortKey="name"
-                    requestSort={requestSort}
-                    getSortDirection={getSortDirection}
-                />
-                 <SortableTableHeader
-                    label="Email"
-                    sortKey="email"
-                    requestSort={requestSort}
-                    getSortDirection={getSortDirection}
-                />
-                 <SortableTableHeader
-                    label="Branch"
-                    sortKey="branch"
-                    requestSort={requestSort}
-                    getSortDirection={getSortDirection}
-                />
-                 <SortableTableHeader
-                    label="Department"
-                    sortKey="department"
-                    requestSort={requestSort}
-                    getSortDirection={getSortDirection}
-                />
-                <SortableTableHeader
-                    label="Actions"
-                    className="text-right"
-                    isSortable={false}
-                />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedData.length > 0 ? sortedData.map((employee) => (
-                <TableRow key={employee.id} className="odd:bg-muted/10">
-                  <TableCell className="font-medium">{employee.name}</TableCell>
-                  <TableCell>{employee.email}</TableCell>
-                  <TableCell>{employee.branch}</TableCell>
-                  <TableCell>{employee.department}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(employee)}>
-                        <Pencil className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the employee
-                            <span className="font-bold"> {employee.name}</span> from the database.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => onRemoveEmployee(employee.id)}>
-                            Continue
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
-                </TableRow>
-              )) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
-                    No employees found. Add one or import a JSON file to get started.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+        {isLoading ? <TableSkeleton /> : (
+            <div className="rounded-md border">
+                <div className="overflow-x-auto">
+                <Table>
+                    <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <SortableTableHeader
+                            label="Name"
+                            sortKey="name"
+                            requestSort={requestSort}
+                            getSortDirection={getSortDirection}
+                        />
+                        <SortableTableHeader
+                            label="Email"
+                            sortKey="email"
+                            requestSort={requestSort}
+                            getSortDirection={getSortDirection}
+                        />
+                        <SortableTableHeader
+                            label="Branch"
+                            sortKey="branch"
+                            requestSort={requestSort}
+                            getSortDirection={getSortDirection}
+                        />
+                        <SortableTableHeader
+                            label="Department"
+                            sortKey="department"
+                            requestSort={requestSort}
+                            getSortDirection={getSortDirection}
+                        />
+                        <SortableTableHeader
+                            label="Admin"
+                            sortKey="isAdmin"
+                            requestSort={requestSort}
+                            getSortDirection={getSortDirection}
+                        />
+                        <SortableTableHeader
+                            label="Actions"
+                            className="text-right"
+                            isSortable={false}
+                        />
+                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {sortedData.length > 0 ? sortedData.map((employee) => (
+                        <TableRow key={employee.id} className="odd:bg-muted/10">
+                        <TableCell className="font-medium">{employee.name}</TableCell>
+                        <TableCell>{employee.email}</TableCell>
+                        <TableCell>{employee.branch}</TableCell>
+                        <TableCell>{employee.department}</TableCell>
+                        <TableCell>
+                            {employee.isAdmin && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(employee)}>
+                                <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete the employee
+                                    <span className="font-bold"> {employee.name}</span> from the database.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => onRemoveEmployee(employee.id)}>
+                                    Continue
+                                </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                            </AlertDialog>
+                        </TableCell>
+                        </TableRow>
+                    )) : (
+                        <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                            No employees found. Add one or import a JSON file to get started.
+                        </TableCell>
+                        </TableRow>
+                    )}
+                    </TableBody>
+                </Table>
+                </div>
+            </div>
+        )}
     </div>
   );
 }
-
-    

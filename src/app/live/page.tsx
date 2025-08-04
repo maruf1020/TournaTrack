@@ -18,9 +18,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AppLayout from '@/components/layout/AppLayout';
 import { Gamepad2, Filter, Loader2 } from 'lucide-react';
 import { branches, departments } from '@/lib/placeholder-data';
-import { getMatches } from '@/lib/services';
-import type { Match, Player } from '@/lib/types';
+import { getMatches, getGamesOnce } from '@/lib/services';
+import type { Match, Player, Game } from '@/lib/types';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const PlayerAvatar = ({ player }: { player: Player }) => (
     <div className="flex flex-col items-center gap-2">
@@ -63,9 +64,32 @@ const MatchCard = ({ match }: { match: Match }) => {
   );
 };
 
+const LivePageSkeleton = () => (
+    <div className="flex-1 space-y-4 p-4 sm:p-8 pt-6">
+        <Skeleton className="h-9 w-48" />
+        <Card>
+            <CardContent className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                </div>
+            </CardContent>
+        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Skeleton className="h-36" />
+            <Skeleton className="h-36" />
+            <Skeleton className="h-36" />
+            <Skeleton className="h-36" />
+        </div>
+    </div>
+)
 
 export default function LiveDashboardPage() {
   const [matches, setMatches] = React.useState<Match[]>([]);
+  const [games, setGames] = React.useState<Game[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [now, setNow] = React.useState<Date | null>(null);
 
@@ -78,11 +102,12 @@ export default function LiveDashboardPage() {
   });
 
    React.useEffect(() => {
-    setLoading(true);
     const unsub = getMatches((matchData) => {
         setMatches(matchData);
         setLoading(false);
     });
+
+    getGamesOnce().then(setGames);
 
     setNow(new Date());
      // Update the current time every 30 seconds to check for live matches
@@ -153,10 +178,8 @@ export default function LiveDashboardPage() {
 
 
   const allGames = React.useMemo(() => {
-    const gamesSet = new Set<string>();
-    matches.forEach(m => m.game && gamesSet.add(m.game));
-    return Array.from(gamesSet).sort();
-  }, [matches]);
+    return games.sort((a,b) => a.name.localeCompare(b.name));
+  }, [games]);
 
    const allMatchTypes = React.useMemo(() => {
     const matchTypes = new Set<string>();
@@ -168,12 +191,7 @@ export default function LiveDashboardPage() {
   if (loading) {
     return (
        <AppLayout>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <span>Loading Live Matches...</span>
-          </div>
-        </div>
+        <LivePageSkeleton />
       </AppLayout>
     )
   }
@@ -197,7 +215,7 @@ export default function LiveDashboardPage() {
                       <SelectTrigger><SelectValue placeholder="All Games" /></SelectTrigger>
                       <SelectContent>
                           <SelectItem value="all">All Games</SelectItem>
-                          {allGames.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                          {allGames.map(g => <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>)}
                       </SelectContent>
                   </Select>
                   <Select value={filters.matchType} onValueChange={value => handleFilterChange('matchType', value)}>

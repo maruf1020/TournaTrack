@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader2, Lock, Palette, Trash2, ShieldX, Gamepad, Eye, Download, Upload, AlertTriangle, Settings2, Save } from 'lucide-react';
 import type { Game, Match, PublicSettings } from '@/lib/types';
-import { getGames, addGame, deleteGame, getMatches, deleteMatchesByTournament, getPublicSettings, updatePublicSettings, exportFullDatabase, importFullDatabase } from '@/lib/services';
+import { getGames, addGame, deleteGame, getMatchesOnce, deleteMatchesByTournament, getPublicSettings, updatePublicSettings, exportFullDatabase, importFullDatabase } from '@/lib/services';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -71,12 +71,19 @@ function TournamentSettingsCard() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><Settings2 /> Tournament Settings</CardTitle>
+                    <CardDescription>Configure options for tournament generation and management.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <Skeleton className="h-8 w-full" />
+                     <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-3 w-56" />
+                        </div>
+                        <Skeleton className="h-6 w-11" />
+                    </div>
                 </CardContent>
                  <CardFooter>
-                    <Skeleton className="h-10 w-24" />
+                    <Skeleton className="h-10 w-28" />
                 </CardFooter>
             </Card>
         )
@@ -176,10 +183,19 @@ function PublicVisibilityCard() {
                     <CardDescription>Control which match statuses are visible to the public on the "All Matches" page.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-4 w-3/4 mb-4" />
+                    <div className="grid grid-cols-2 gap-4">
+                        {matchStatuses.map(status => (
+                            <div key={status} className="flex items-center space-x-2">
+                                <Skeleton className="h-4 w-4" />
+                                <Skeleton className="h-4 w-20" />
+                            </div>
+                        ))}
+                    </div>
                 </CardContent>
+                 <CardFooter>
+                    <Skeleton className="h-10 w-28" />
+                </CardFooter>
             </Card>
         )
     }
@@ -280,9 +296,12 @@ function GameManagementCard() {
                 <div className="space-y-2 rounded-md border p-2 h-48 overflow-y-auto">
                     {isLoading ? (
                         <div className="space-y-2 p-2">
-                            <Skeleton className="h-8 w-full" />
-                            <Skeleton className="h-8 w-full" />
-                            <Skeleton className="h-8 w-full" />
+                            {[...Array(3)].map((_, i) => (
+                                <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                                    <Skeleton className="h-5 w-32" />
+                                    <Skeleton className="h-8 w-8" />
+                                </div>
+                            ))}
                         </div>
                     ) : games.length > 0 ? (
                         games.map(game => (
@@ -425,12 +444,11 @@ function DangerZoneCard() {
 
      React.useEffect(() => {
         setIsLoading(true);
-        const unsubscribe = getMatches((matches) => {
+        getMatchesOnce().then((matches) => {
             const tournamentNames = [...new Set(matches.map(m => m.tournamentName))].sort();
             setTournaments(tournamentNames);
             setIsLoading(false);
         });
-        return () => unsubscribe();
     }, []);
 
     const handleDeleteTournament = async (tournamentName: string) => {
@@ -438,6 +456,10 @@ function DangerZoneCard() {
         try {
             await deleteMatchesByTournament(tournamentName);
             toast({ title: 'Tournament Deleted', description: `All matches for "${tournamentName}" have been cleared.` });
+             // Refetch tournaments
+            const matches = await getMatchesOnce();
+            const tournamentNames = [...new Set(matches.map(m => m.tournamentName))].sort();
+            setTournaments(tournamentNames);
         } catch (error: any) {
             toast({ title: 'Error', description: `Failed to delete tournament matches: ${error.message}`, variant: 'destructive' });
         } finally {
@@ -457,9 +479,14 @@ function DangerZoneCard() {
                 
                  <ScrollArea className="h-48 rounded-md border">
                     {isLoading ? (
-                        <div className="flex items-center justify-center h-full">
-                            <Loader2 className="h-6 w-6 animate-spin" />
-                        </div>
+                         <div className="space-y-2 p-2">
+                             {[...Array(3)].map((_, i) => (
+                                <div key={i} className="flex items-center justify-between p-2 bg-destructive/10 rounded-md">
+                                    <Skeleton className="h-5 w-40" />
+                                    <Skeleton className="h-9 w-24" />
+                                </div>
+                            ))}
+                         </div>
                     ) : tournaments.length > 0 ? (
                         <div className="p-2 space-y-2">
                         {tournaments.map(name => (
@@ -491,7 +518,7 @@ function DangerZoneCard() {
                         ))}
                         </div>
                     ) : (
-                        <div className="flex items-center justify-center h-full">
+                        <div className="flex items-center justify-center h-full p-4">
                             <p className="text-muted-foreground">No tournaments found.</p>
                         </div>
                     )}

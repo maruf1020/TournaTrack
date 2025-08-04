@@ -1,9 +1,11 @@
+
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
+import { getPlayerByEmail } from '@/lib/services';
 
 interface AuthContextType {
   user: User | null;
@@ -25,25 +27,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true);
-      if (user) {
+      if (user && user.email) {
         setUser(user);
-        // In a real app, you would check for a custom claim or a role in your database.
-        // For this demo, we'll hardcode the admin check based on email.
-        const isAdminUser = user.email === 'admin@echologyx.com';
+        const playerProfile = await getPlayerByEmail(user.email);
+        // User is admin if their email is the default admin email OR if their profile has isAdmin set to true.
+        const isAdminUser = user.email === 'admin@echologyx.com' || (playerProfile?.isAdmin || false);
         setIsAdmin(isAdminUser);
         
-        // If user is on login page, redirect to dashboard
         if (pathname === '/login') {
             router.push('/');
         }
       } else {
         setUser(null);
         setIsAdmin(false);
-        // If user is not logged in and tries to access a protected route, redirect to login
-        // For now, only /admin is protected, but you could expand this.
-        if (pathname === '/admin') {
+        const protectedRoutes = ['/admin', '/settings'];
+        if (protectedRoutes.includes(pathname)) {
             router.push('/login');
         }
       }

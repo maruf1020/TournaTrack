@@ -9,11 +9,12 @@ import {
   TableCell,
   TableHeader,
   TableRow,
+  TableHead,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Trophy, Loader2, Filter, Calendar as CalendarIcon, Pencil, Trash2, Download } from 'lucide-react';
 import type { Match, Player, Game, PublicSettings } from '@/lib/types';
-import { getMatchesOnce, updateMatch, getPublicSettings } from '@/lib/services';
+import { getMatchesOnce, updateMatch, getPublicSettings, getGamesOnce } from '@/lib/services';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -29,6 +30,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { useAuth } from '@/hooks/use-auth';
 import { useSortableTable } from '@/hooks/use-sortable-table';
 import { SortableTableHeader } from '@/components/ui/sortable-table-header';
+import { Skeleton } from '@/components/ui/skeleton';
 
 
 function EditMatchDialog({ match, onUpdate, open, onOpenChange }: { match: Match | null, onUpdate: (match: Match) => void, open: boolean, onOpenChange: (open: boolean) => void }) {
@@ -236,9 +238,53 @@ const WinnerDisplay = ({ players }: { players: Player[] | undefined }) => {
     );
 };
 
+const MatchListSkeleton = () => (
+    <div className="space-y-4">
+        <div className="p-4 border rounded-lg bg-card space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+            </div>
+        </div>
+        <div className="rounded-md border">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+                        <TableHead><Skeleton className="h-5 w-32" /></TableHead>
+                        <TableHead><Skeleton className="h-5 w-48" /></TableHead>
+                        <TableHead><Skeleton className="h-5 w-20" /></TableHead>
+                        <TableHead><Skeleton className="h-5 w-20" /></TableHead>
+                        <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+                        <TableHead className="text-right"><Skeleton className="h-5 w-16" /></TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                     {[...Array(10)].map((_, i) => (
+                        <TableRow key={i}>
+                            <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                            <TableCell className="text-right"><Skeleton className="h-8 w-8" /></TableCell>
+                        </TableRow>
+                     ))}
+                </TableBody>
+            </Table>
+        </div>
+    </div>
+)
+
 
 export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmin?: boolean, onFilteredMatchesChange?: (matches: Match[]) => void }) {
   const [matchList, setMatchList] = React.useState<Match[]>([]);
+  const [games, setGames] = React.useState<Game[]>([]);
   const [publicSettings, setPublicSettings] = React.useState<PublicSettings | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [editingMatch, setEditingMatch] = React.useState<Match | null>(null);
@@ -262,8 +308,9 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
     async function loadData() {
         setLoading(true);
         try {
-            const [matches, settings] = await Promise.all([
+            const [matches, gamesData, settings] = await Promise.all([
                 getMatchesOnce(),
+                getGamesOnce(),
                 !isAdmin ? new Promise<PublicSettings | null>((resolve) => {
                     const unsub = getPublicSettings((s) => {
                         resolve(s);
@@ -272,6 +319,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
                 }) : Promise.resolve(null)
             ]);
             setMatchList(matches);
+            setGames(gamesData);
             if (settings) {
                 setPublicSettings(settings);
             }
@@ -330,12 +378,8 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
   }, [filteredMatches, onFilteredMatchesChange]);
 
   const allGames = React.useMemo(() => {
-    const games = new Set<string>();
-    matchList.forEach(m => {
-        m.game && games.add(m.game);
-    });
-    return Array.from(games).sort();
-  }, [matchList]);
+    return games.sort((a,b) => a.name.localeCompare(b.name));
+  }, [games]);
 
    const allMatchTypes = React.useMemo(() => {
     const matchTypes = new Set<string>();
@@ -372,12 +416,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
 
   
   if (loading || authLoading) {
-    return (
-        <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-2">Loading Matches...</span>
-        </div>
-    )
+    return <MatchListSkeleton />
   }
 
 
@@ -396,7 +435,7 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
                     <SelectTrigger><SelectValue placeholder="All Games" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Games</SelectItem>
-                        {allGames.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                        {allGames.map(g => <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>)}
                     </SelectContent>
                 </Select>
                 <Select value={filters.matchType} onValueChange={value => handleFilterChange('matchType', value)}>

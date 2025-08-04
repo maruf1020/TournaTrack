@@ -65,6 +65,26 @@ export async function getPlayersOnce(): Promise<Player[]> {
     }
 }
 
+/**
+ * Fetches a single player profile from Firestore by email.
+ * @param email The email of the player to fetch.
+ * @returns A promise that resolves with the Player object or null if not found.
+ */
+export async function getPlayerByEmail(email: string): Promise<Player | null> {
+  try {
+    const q = query(collection(db, 'employees'), where('email', '==', email));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) {
+      return null;
+    }
+    const docData = snapshot.docs[0];
+    return { id: docData.id, ...docData.data() } as Player;
+  } catch (error) {
+    console.error("Error fetching player by email:", error);
+    return null;
+  }
+}
+
 
 /**
  * Adds a new player to the Firestore 'employees' collection.
@@ -89,7 +109,7 @@ export async function addPlayer(playerData: Omit<Player, 'id'>): Promise<Player>
  * @param playerId The ID of the player to update.
  * @param playerData The partial player data to update.
  */
-export async function updatePlayer(playerId: string, playerData: Partial<Omit<Player, 'id' | 'isAdmin' | 'email'>>): Promise<void> {
+export async function updatePlayer(playerId: string, playerData: Partial<Omit<Player, 'id' | 'email'>>): Promise<void> {
   try {
     const playerRef = doc(db, 'employees', playerId);
     await updateDoc(playerRef, playerData);
@@ -127,7 +147,7 @@ export async function importEmployees(employees: EmployeeUploadData[]): Promise<
     const existingEmails = new Set(existingPlayersSnapshot.docs.map(d => d.data().email));
 
     employees.forEach(emp => {
-      const userEmail = emp.user_email;
+      const userEmail = emp.email;
       if (!userEmail) {
         console.warn(`Skipping employee with missing email.`);
         return;
@@ -146,7 +166,7 @@ export async function importEmployees(employees: EmployeeUploadData[]): Promise<
         department: emp.department,
         designation: emp.designation,
         joiningDate: emp.joiningDate,
-        imageUrl: emp.user_profilePicture || `https://placehold.co/100x100.png`,
+        imageUrl: emp.imageUrl || `https://placehold.co/100x100.png`,
         isAdmin: userEmail === 'admin@echologyx.com',
       };
       batch.set(docRef, newPlayer);
@@ -168,7 +188,7 @@ export async function importEmployees(employees: EmployeeUploadData[]): Promise<
  * This can be a single match or all matches for a tournament.
  * @param newMatches An array of match objects to be added.
  */
-export async function addMatches(newMatches: Omit<Match, 'id' | 'date' | 'isDatePublished' | 'startTime' | 'endTime'>[], gameName: string, roundName: string, matchType: string): Promise<void> {
+export async function addMatches(newMatches: Omit<Match, 'id' | 'date' | 'isDatePublished' | 'startTime' | 'endTime'>[]): Promise<void> {
     const batch = writeBatch(db);
 
     newMatches.forEach(match => {
@@ -268,12 +288,15 @@ export async function updateMatch(matchId: string, updatedData: Partial<Match>):
   const matchRef = doc(db, 'matches', matchId);
   await updateDoc(matchRef, updatedData);
 
-  // If a winner is being set, try to advance them.
+  // If a winner is being set for a knockout match, try to advance them.
   if (updatedData.winnerId && updatedData.status === 'finished') {
     const matchDoc = await getDoc(matchRef);
     if (!matchDoc.exists()) return;
 
     const matchData = matchDoc.data() as Match;
+
+    // Only advance winners in Knockout tournaments
+    if (matchData.tournamentType !== 'Knockout') return;
 
     const nextMatchInfo = await findNextMatchForWinner(matchData.matchName, matchData.tournamentName);
     

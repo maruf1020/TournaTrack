@@ -23,7 +23,13 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-const PlayerListDisplay = ({ players, isWinner }: { players: Player[]; isWinner?: boolean }) => {
+const PlayerListDisplay = ({ players, isWinner, placeholder }: { players?: Player[]; isWinner?: boolean, placeholder?: string }) => {
+  if (placeholder && (!players || players.length === 0)) {
+    return <div className="text-sm italic opacity-70">{placeholder}</div>;
+  }
+   if (!players || players.length === 0) {
+    return <div className="text-sm italic opacity-70">TBD</div>;
+  }
   return (
     <div className={cn(isWinner && 'font-bold text-emerald-600')}>
       {players.map((p, index) => (
@@ -44,9 +50,6 @@ function MatchRow({ match, selectedPlayerId }: { match: Match; selectedPlayerId:
     const p1IsWinner = match.winnerId && match.player1.some(p => p.id === match.winnerId);
     const p2IsWinner = match.winnerId && match.player2.some(p => p.id === match.winnerId);
     const brWinner = match.winnerId && match.allPlayers?.find(p => p.id === match.winnerId);
-
-    const opponent = isP1 ? match.player2 : match.player1;
-    const opponentPlaceholder = isP1 ? match.player2Placeholder : match.player1Placeholder;
 
     let result: 'win' | 'loss' | 'pending' = 'pending';
     if(match.status === 'finished' && match.winnerId) {
@@ -96,12 +99,11 @@ function MatchRow({ match, selectedPlayerId }: { match: Match; selectedPlayerId:
                         )}
                     </p>
                 ) : (
-                    <>
-                        vs. {' '}
-                        <span className="font-medium text-foreground">
-                             {opponent.length > 0 ? opponent.map(p => p.name).join(' & ') : opponentPlaceholder || 'TBD'}
-                        </span>
-                    </>
+                   <div className="flex items-start justify-between gap-2">
+                      <PlayerListDisplay players={match.player1} isWinner={p1IsWinner} placeholder={match.player1Placeholder} />
+                      <div className="font-sans font-bold text-center text-xs px-2 py-1">vs</div>
+                      <PlayerListDisplay players={match.player2} isWinner={p2IsWinner} placeholder={match.player2Placeholder} />
+                   </div>
                 )}
             </div>
         </div>

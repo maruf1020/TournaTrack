@@ -6,7 +6,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
-import { Lock, Loader2, Users, ListChecks, Sword, Download } from 'lucide-react';
+import { Lock, Loader2, Users, Sword, ListChecks, Download } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmployeeManager from '@/components/admin/EmployeeManager';
 import CreateMatches from '@/components/admin/CreateMatches';
@@ -25,7 +25,7 @@ import type { Match, Player } from '@/lib/types';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 
-type AdminTab = 'employees' | 'create' | 'manage';
+type AdminTab = 'manage' | 'create' | 'employees';
 
 function AdminContent({ activeTab, onMatchesCreated }: { activeTab: AdminTab, onMatchesCreated: () => void }) {
   const [filteredMatches, setFilteredMatches] = React.useState<Match[]>([]);
@@ -258,9 +258,7 @@ export default function AdminPage() {
         </div>
         
         <div className="mt-6">
-            <React.Suspense fallback={<Skeleton className="h-96 w-full" />}>
-                 <AdminContent key={key} activeTab={activeTab} onMatchesCreated={handleMatchesCreated} />
-            </React.Suspense>
+            <AdminContent key={key} activeTab={activeTab} onMatchesCreated={handleMatchesCreated} />
         </div>
       </div>
     </AppLayout>

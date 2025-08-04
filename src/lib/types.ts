@@ -10,8 +10,14 @@ export type Player = {
   department: string;
   designation: string;
   joiningDate: string;
-  imageUrl: string;
+  imageUrl?: string;
   isAdmin: boolean;
+  // Stats for group stage view
+  played?: number;
+  wins?: number;
+  losses?: number;
+  draws?: number;
+  points?: number;
 };
 
 export type Game = {
@@ -29,8 +35,10 @@ export type Match = {
   id:string;
   tournamentName: string; // e.g. "Dhanmondi Carrom Championship 2024"
   game: string; // e.g. "Carrom"
-  matchName: string; // e.g. "Round 1 - Match 1"
+  matchName: string; // e.g. "Round 1 - Match 1" or "Group A - Match 1"
   matchType: string;
+  tournamentType: 'Knockout' | 'Group Stage';
+  groupName?: string; // e.g., "Group A"
   player1: Player[]; // Now an array to support teams
   player2: Player[]; // Now an array to support teams
   player1Placeholder?: string;
@@ -57,18 +65,19 @@ export type Tournament = {
   game: string;
   branch: string;
   rounds: Round[];
+  tournamentType: 'Knockout' | 'Group Stage';
 };
 
 // Represents the structure of the uploaded JSON data for employees
 export type EmployeeUploadData = {
-  id: number;
+  id?: number;
   employeeId: string;
   name: string;
   joiningDate: string;
   designation: string;
   branch: string;
-  user_email: string;
-  user_profilePicture: string | null;
+  email: string;
+  imageUrl: string | null;
   department: string;
 };
 

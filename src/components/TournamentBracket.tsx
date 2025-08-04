@@ -6,22 +6,69 @@ import type { BracketRound } from '@/lib/bracket-utils';
 import type { Player } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from './ui/status-badge';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Button } from './ui/button';
+import { Info, Users } from 'lucide-react';
 
-const Team = ({ player, placeholder }: { player: Player[] | undefined; placeholder?: string }) => {
-  if (placeholder && (!player || player.length === 0)) {
+const PlayerListPopover = ({ players }: { players: Player[] }) => {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-5 w-5 ml-1 text-primary hover:text-primary/80">
+          <Info className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60">
+        <div className="space-y-2">
+          <h4 className="font-medium leading-none flex items-center gap-2"><Users className="h-4 w-4" /> {players.length > 1 ? 'Team Roster' : 'Player Info'}</h4>
+          <div className="text-sm text-muted-foreground space-y-1">
+            {players.map((p, index) => (
+              <div key={p.id}>
+                {players.length > 1 ? `${index + 1}. ` : ''}{p.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+
+const Team = ({ players, placeholder }: { players?: Player[]; placeholder?: string }) => {
+  if (placeholder) {
     return <div className="text-sm italic opacity-70">{placeholder}</div>;
   }
-  if (!player || player.length === 0) {
+  if (!players || players.length === 0) {
     return <div className="text-sm italic opacity-70">TBD</div>;
   }
+  
+  const isMultiPlayer = players.length > 1;
+  const mainPlayerName = players[0].name;
+  const isTruncated = !isMultiPlayer && mainPlayerName.length > 24;
+  const showInfoIcon = isMultiPlayer || isTruncated;
+
+  let displayName: string;
+  if (isMultiPlayer) {
+    displayName = `${mainPlayerName} (${players.length})`;
+  } else if (isTruncated) {
+    displayName = `${mainPlayerName.substring(0, 20)}...`;
+  } else {
+    displayName = mainPlayerName;
+  }
+
+
   return (
-    <div className="text-sm font-medium">
-      {player.map((p) => p.name).join(' & ')}
+    <div className="flex items-center text-sm font-medium">
+      <span className="truncate">
+        {displayName}
+      </span>
+      {showInfoIcon && <PlayerListPopover players={players} />}
     </div>
   );
 };
 
-const MatchCard = ({ match }: { match: BracketRound['matches'][0] }) => {
+const MatchCard = ({ match, isHighlighted }: { match: BracketRound['matches'][0], isHighlighted?: boolean }) => {
   const isFinished = match.status === 'finished';
   
   const p1IsWinner = match.winnerId && match.player1.some(p => p.id === match.winnerId);
@@ -29,10 +76,16 @@ const MatchCard = ({ match }: { match: BracketRound['matches'][0] }) => {
   const brWinner = match.winnerId && match.allPlayers?.find(p => p.id === match.winnerId);
 
   return (
-    <div className="w-60 rounded-lg border bg-card text-card-foreground shadow-sm relative z-10">
+    <div 
+      id={match.id}
+      className={cn(
+          "w-60 rounded-lg border bg-card text-card-foreground shadow-sm relative transition-all duration-300",
+          isHighlighted && "ring-2 ring-primary scale-[0.98]"
+      )}
+    >
       <div className="p-3">
         <div className="flex justify-between items-center mb-2">
-            <h4 className="text-xs font-semibold text-muted-foreground">{match.matchName}</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground truncate">{match.matchName}</h4>
             <StatusBadge status={match.status} />
         </div>
         
@@ -48,7 +101,7 @@ const MatchCard = ({ match }: { match: BracketRound['matches'][0] }) => {
         ) : (
             <div className="space-y-2">
                 <div className={cn("flex justify-between items-center", isFinished && p1IsWinner && "font-bold text-emerald-600")}>
-                    <Team player={match.player1} placeholder={match.player1Placeholder} />
+                    <Team players={match.player1} placeholder={match.player1Placeholder} />
                     {isFinished && <div className="font-mono">{match.score.player1}</div>}
                 </div>
                 
@@ -62,7 +115,7 @@ const MatchCard = ({ match }: { match: BracketRound['matches'][0] }) => {
                 </div>
 
                 <div className={cn("flex justify-between items-center", isFinished && p2IsWinner && "font-bold text-emerald-600")}>
-                    <Team player={match.player2} placeholder={match.player2Placeholder} />
+                    <Team players={match.player2} placeholder={match.player2Placeholder} />
                     {isFinished && <div className="font-mono">{match.score.player2}</div>}
                 </div>
             </div>
@@ -72,7 +125,7 @@ const MatchCard = ({ match }: { match: BracketRound['matches'][0] }) => {
   );
 };
 
-export function TournamentBracket({ rounds }: { rounds: BracketRound[] }) {
+export function TournamentBracket({ rounds, highlightedMatchId }: { rounds: BracketRound[], highlightedMatchId?: string }) {
   if (!rounds || rounds.length === 0) return null;
 
   const ROUND_GAP = 100;
@@ -311,9 +364,9 @@ export function TournamentBracket({ rounds }: { rounds: BracketRound[] }) {
                   <div
                     key={match.id}
                     className="absolute"
-                    style={{ top: y + 80, zIndex: 10 }}
+                    style={{ top: y + 80 }}
                   >
-                    <MatchCard match={match} />
+                    <MatchCard match={match} isHighlighted={match.id === highlightedMatchId} />
                   </div>
                 ))}
               </div>

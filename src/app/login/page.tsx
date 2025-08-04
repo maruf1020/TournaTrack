@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -20,6 +21,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Trophy } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getPlayerByEmail } from '@/lib/services';
+
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
@@ -62,12 +65,27 @@ export default function LoginPage() {
     setIsSubmitting(true);
     
     try {
-        await signInWithEmailAndPassword(auth, data.email, data.password);
-        toast({
-          title: 'Login Successful',
-          description: 'Welcome back!',
-        });
-        router.push('/');
+        const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+        
+        // After successful sign-in, check their profile for admin status
+        if (userCredential.user && userCredential.user.email) {
+            const playerProfile = await getPlayerByEmail(userCredential.user.email);
+            if (playerProfile) {
+                toast({
+                    title: 'Login Successful',
+                    description: playerProfile.isAdmin ? 'Welcome back, Admin!' : 'Welcome back!',
+                });
+            } else {
+                 toast({
+                    title: 'Login Successful',
+                    description: 'Welcome! Your profile is not in the employee database.',
+                });
+            }
+             // Now that we have confirmed the user and their potential role, we can redirect.
+            // The useAuth hook will have the correct data on the next page load.
+            router.push('/');
+        }
+
     } catch (error: any) {
         // If user does not exist, try creating the user for the first time.
         // This is useful for the initial setup.
