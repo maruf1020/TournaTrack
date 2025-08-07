@@ -27,7 +27,7 @@ export default function StoryPage() {
             </div>
           </CardHeader>
           <CardContent className="p-6 md:p-8 -mt-12 relative z-10">
-            <h1 className="text-3xl md:text-4xl font-bold font-headline text-primary mb-6">From Paper to Pixels: The Spark Behind TournaTrack</h1>
+            <h1 className="text-3xl md:text-4xl font-bold font-headline text-primary mb-6">From Paper to Pixels: The Spark Behind Tour Console</h1>
             
             <div className="prose prose-lg dark:prose-invert max-w-none text-muted-foreground space-y-6">
               <p>
@@ -43,7 +43,7 @@ export default function StoryPage() {
                 That shared experience planted a seed. What if we could capture the passion and precision of that team and channel it into a tool? What if we could build something that would automate the tedious tasks, so future organizers could focus on what truly matters—the players and the games? We envisioned a platform that would honor the hard work of the past by making the future simpler, more efficient, and even more engaging.
               </p>
               <p>
-                And so, <b>ELX-TournaTrack</b> was born. This application is not just a piece of software; it's a digital tribute to the team that made last year's tournament unforgettable. It’s built to handle everything from player registration and dynamic bracket generation to live score tracking, all in one seamless interface. Our goal was to eliminate the paperwork, not the passion.
+                And so, <b>Tour Console</b> was born. This application is not just a piece of software; it's a digital tribute to the team that made last year's tournament unforgettable. It’s built to handle everything from player registration and dynamic bracket generation to live score tracking, all in one seamless interface. Our goal was to eliminate the paperwork, not the passion.
               </p>
                <p>
                 This project stands on the shoulders of those who managed the chaos with a smile. It’s a testament to the idea that the best solutions come from shared experiences, and that with a bit of inspiration and technology, we can empower our community to create even more memorable moments together. We dedicate this application to all their hard work.

@@ -1,6 +1,6 @@
-# ELX-TournaTrack: Annual Tour Sports Tournament Management
+# Tour Console: Annual Tour Sports Tournament Management
 
-Welcome to **ELX-TournaTrack**, a comprehensive, modern web application designed to streamline the process of managing sports tournaments. Built with a powerful stack including Next.js, Firebase, and Genkit for AI-powered features, this platform provides an intuitive and efficient solution for tournament organizers.
+Welcome to **Tour Console**, a comprehensive, modern web application designed to streamline the process of managing sports tournaments. Built with a powerful stack including Next.js, Firebase, and Genkit for AI-powered features, this platform provides an intuitive and efficient solution for tournament organizers.
 
 ## Key Features
 

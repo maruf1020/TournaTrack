@@ -78,7 +78,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <title>ELX-TournaTrack</title>
+        <title>Tour Console</title>
         <meta name="description" content="Annual Tour Sports Tournament Management" />
       </head>
       <body className={cn(roboto.variable, "font-sans antialiased", "min-h-screen bg-background")}>

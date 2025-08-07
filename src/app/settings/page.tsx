@@ -547,7 +547,7 @@ function BackupRestoreCard() {
             const now = new Date();
             const date = now.toISOString().split('T')[0];
             const time = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-            link.download = `tournatrack_backup_${date}_${time}.json`;
+            link.download = `tourconsole_backup_${date}_${time}.json`;
 
             link.click();
             toast({ title: "Export Successful", description: "Database backup has been downloaded." });

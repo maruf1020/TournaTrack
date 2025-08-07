@@ -62,7 +62,7 @@ export default function AppSidebar() {
               state === 'collapsed' ? 'opacity-0' : 'opacity-100'
             )}
           >
-            ELX TournaTrack
+            Tour Console
           </h1>
         </Link>
       </SidebarHeader>
