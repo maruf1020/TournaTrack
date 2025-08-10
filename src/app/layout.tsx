@@ -2,6 +2,7 @@
 'use client'; // This component now uses client-side hooks
 
 import './globals.css';
+
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';

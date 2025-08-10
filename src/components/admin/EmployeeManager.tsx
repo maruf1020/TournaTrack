@@ -49,11 +49,13 @@ import { Skeleton } from '../ui/skeleton';
 import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { branches, departments } from '@/lib/placeholder-data';
+import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 
 
 const employeeSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.'),
+  mobile: z.string().optional(),
   branch: z.string().min(1, 'Branch is required.'),
   department: z.string().min(1, 'Department is required.'),
   designation: z.string().min(1, 'Designation is required.'),
@@ -84,6 +86,7 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
     defaultValues: {
       name: '',
       email: '',
+      mobile: '',
       branch: '',
       department: '',
       designation: '',
@@ -104,7 +107,7 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
         });
     } else {
         reset({
-            name: '', email: '', branch: '', department: '', designation: '', employeeId: '', joiningDate: '', imageUrl: '', isAdmin: false
+            name: '', email: '', mobile: '', branch: '', department: '', designation: '', employeeId: '', joiningDate: '', imageUrl: '', isAdmin: false
         });
     }
   }, [employeeToEdit, reset]);
@@ -160,6 +163,11 @@ function EmployeeFormDialog({ onEmployeeAdded, trigger, employeeToEdit, onEmploy
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" {...register('email')} disabled={isEditMode} />
               {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mobile">Mobile Number (Optional)</Label>
+              <Input id="mobile" {...register('mobile')} />
+              {errors.mobile && <p className="text-sm text-destructive">{errors.mobile.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="employeeId">Employee ID</Label>
@@ -265,7 +273,7 @@ const JsonFormatPopover = () => (
                     <h4 className="font-medium leading-none">JSON Import Format</h4>
                     <p className="text-sm text-muted-foreground">
                        Your JSON file must be an array of objects with the following structure.
-                       The `imageUrl` and `id` fields are optional.
+                       The `imageUrl`, `mobile` and `id` fields are optional.
                     </p>
                 </div>
                 <pre className="text-xs p-2 bg-muted rounded-md overflow-x-auto">
@@ -274,6 +282,7 @@ const JsonFormatPopover = () => (
     "employeeId": "EMP-001",
     "name": "John Doe",
     "email": "john.doe@example.com",
+    "mobile": "01234567890",
     "joiningDate": "2023-01-15T00:00:00.000Z",
     "designation": "Software Engineer",
     "branch": "Dhanmondi",
@@ -293,6 +302,7 @@ export default function EmployeeManager() {
   const [isImporting, setIsImporting] = React.useState(false);
   const [editingEmployee, setEditingEmployee] = React.useState<Player | null>(null);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
+  const [importErrors, setImportErrors] = React.useState<string[]>([]);
 
   const { user } = useAuth();
   const { toast } = useToast();
@@ -370,6 +380,7 @@ export default function EmployeeManager() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setImportErrors([]);
     setIsImporting(true);
     try {
       const content = await file.text();
@@ -379,10 +390,10 @@ export default function EmployeeManager() {
       if (result.success) {
         toast({ title: "Import Successful", description: `${result.count} new employees imported.` });
       } else {
-        throw new Error(result.error || "An unknown error occurred during import.");
+        setImportErrors(result.errors || ["An unknown error occurred during import."]);
       }
     } catch (error: any) {
-      toast({ title: "Import Failed", description: error.message || "Please check the file format and content.", variant: "destructive" });
+      setImportErrors([error.message || "Please check the file format and content."]);
     } finally {
       setIsImporting(false);
       if (event.target) {
@@ -414,6 +425,18 @@ export default function EmployeeManager() {
                     </Button>
                 </div>
             </div>
+             {importErrors.length > 0 && (
+                <Alert variant="destructive">
+                    <AlertTitle>Import Failed</AlertTitle>
+                    <AlertDescription>
+                        <ul className="list-disc pl-5">
+                            {importErrors.map((error, index) => (
+                                <li key={index}>{error}</li>
+                            ))}
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+            )}
             <div className="p-4 border rounded-lg bg-card space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <Input 

@@ -6,6 +6,7 @@ export type Player = {
   employeeId: string;
   email: string;
   name: string;
+  mobile?: string;
   branch: string;
   department: string;
   designation: string;
@@ -73,12 +74,13 @@ export type EmployeeUploadData = {
   id?: number;
   employeeId: string;
   name: string;
+  email: string;
+  mobile?: string;
   joiningDate: string;
   designation: string;
   branch: string;
-  email: string;
-  imageUrl: string | null;
   department: string;
+  imageUrl: string | null;
 };
 
 // Represents the structure for public-facing settings
@@ -89,7 +91,6 @@ export type PublicSettings = {
   allowBracketEditing: boolean;
   primaryColor?: string;
 };
-
 
 // Schemas for AI Flow
 // Define the schema for the input of the matchup suggestion flow.
@@ -113,3 +114,49 @@ export const SuggestMatchupsOutputSchema = z.object({
   matchups: z.array(MatchupSchema).describe('An array of suggested matchups.'),
 });
 export type SuggestMatchupsOutput = z.infer<typeof SuggestMatchupsOutputSchema>;
+
+
+// === Event Management Types ===
+
+export type Location = {
+  lat: number;
+  lng: number;
+  label: string;
+};
+
+export type ProgramRole = {
+  id: string; // unique id for the role within a program, e.g. a UUID
+  roleName: string;
+  priority: number; // 1-5
+  assignedEmployees: Pick<Player, 'id' | 'name' | 'email' | 'imageUrl'>[];
+};
+
+export type Program = {
+  id: string;
+  eventId: string;
+  name: string;
+  description?: string;
+  startTime: Date;
+  endTime: Date;
+  startLocation: Location;
+  endLocation?: Location | null;
+  roles: ProgramRole[];
+};
+
+export type Event = {
+  id: string;
+  name: string;
+  startTime: Date;
+  endTime: Date;
+};
+
+// === Room Planner Types ===
+export type AssignedEmployee = Pick<Player, 'id' | 'name' | 'email' | 'imageUrl' | 'branch' | 'designation'>;
+
+export type Room = {
+  id: string;
+  name: string; // e.g., "Room 101", "Villa A"
+  capacity: number;
+  assignedEmployees: AssignedEmployee[];
+  eventId: string; 
+};

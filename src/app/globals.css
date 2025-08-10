@@ -93,4 +93,28 @@
     width: 100vw;
   }
   
+  /* Fix for Google Places Autocomplete suggestions */
+  .pac-container {
+    z-index: 9999 !important;
+    background-color: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    border-radius: var(--radius);
+    border-width: 1px;
+    border-color: hsl(var(--border));
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+  
+  .pac-item {
+     padding: 0.5rem;
+     cursor: pointer;
+     border: 2px solid transparent; /* To prevent layout shift on hover */
+  }
+
+  .pac-item:hover {
+     background-color: hsl(var(--muted));
+  }
+  
+  .pac-item-query {
+    font-weight: 500;
+  }
 }

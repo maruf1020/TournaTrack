@@ -142,6 +142,13 @@ export default function LoginPage() {
                 title: 'Firebase Configuration Error',
                 description: 'Email/Password sign-in is not enabled. Please enable it in the Firebase console.',
             });
+        } else if (error.code === 'auth/network-request-failed') {
+            toast({
+                variant: 'destructive',
+                title: 'Network Error: Cannot Connect to Firebase',
+                description: 'Please ensure you have created a Firestore database in your Firebase project and that your security rules/API key restrictions allow access.',
+                duration: 10000,
+            });
         }
         else {
             toast({

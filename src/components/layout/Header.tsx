@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -21,7 +22,7 @@ import { cn } from '@/lib/utils';
 import ClientOnly from '../ClientOnly';
 
 export default function Header() {
-  const { user, loading } = useAuth();
+  const { user, loading, playerId } = useAuth();
   const { state } = useSidebar();
 
   const handleLogout = () => {
@@ -74,9 +75,11 @@ export default function Header() {
             <>
               <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                Profile
+              <DropdownMenuItem asChild>
+                 <Link href={`/employees/${playerId}`}>
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>

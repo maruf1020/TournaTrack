@@ -11,17 +11,20 @@ interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
   loading: boolean;
+  playerId: string | null;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAdmin: false,
   loading: true,
+  playerId: null,
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
@@ -32,7 +35,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (user && user.email) {
         setUser(user);
         const playerProfile = await getPlayerByEmail(user.email);
-        // User is admin if their email is the default admin email OR if their profile has isAdmin set to true.
+        setPlayerId(playerProfile?.id || null);
+        
         const isAdminUser = user.email === 'admin@echologyx.com' || (playerProfile?.isAdmin || false);
         setIsAdmin(isAdminUser);
         
@@ -42,6 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setUser(null);
         setIsAdmin(false);
+        setPlayerId(null);
         const protectedRoutes = ['/admin', '/settings'];
         if (protectedRoutes.includes(pathname)) {
             router.push('/login');
@@ -53,7 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, [router, pathname]);
 
-  const value = { user, isAdmin, loading };
+  const value = { user, isAdmin, loading, playerId };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

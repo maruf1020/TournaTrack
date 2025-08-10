@@ -7,8 +7,8 @@
  */
 
 import { db } from './firebase';
-import { collection, onSnapshot, doc, setDoc, addDoc, writeBatch, deleteDoc, updateDoc, query, getDocs, where, getDoc, Timestamp } from 'firebase/firestore';
-import type { Player, Match, EmployeeUploadData, Game, PublicSettings } from './types';
+import { collection, onSnapshot, doc, setDoc, addDoc, writeBatch, deleteDoc, updateDoc, query, getDocs, where, getDoc, Timestamp, collectionGroup } from 'firebase/firestore';
+import type { Player, Match, EmployeeUploadData, Game, PublicSettings, Event, Program, Room } from './types';
 
 
 // === Player Services ===
@@ -85,6 +85,26 @@ export async function getPlayerByEmail(email: string): Promise<Player | null> {
   }
 }
 
+/**
+ * Fetches a single player profile from Firestore by ID.
+ * @param playerId The ID of the player to fetch.
+ * @returns A promise that resolves with the Player object or null if not found.
+ */
+export async function getPlayerById(playerId: string): Promise<Player | null> {
+  try {
+    const playerRef = doc(db, 'employees', playerId);
+    const playerSnap = await getDoc(playerRef);
+
+    if (!playerSnap.exists()) {
+      return null;
+    }
+    return { id: playerSnap.id, ...playerSnap.data() } as Player;
+  } catch (error) {
+    console.error("Error fetching player by ID:", error);
+    return null;
+  }
+}
+
 
 /**
  * Adds a new player to the Firestore 'employees' collection.
@@ -137,23 +157,29 @@ export async function removePlayer(playerId: string): Promise<void> {
  * Imports a batch of employees from a JSON file into Firestore.
  * @param employees - An array of employee data from the uploaded JSON.
  */
-export async function importEmployees(employees: EmployeeUploadData[]): Promise<{success: boolean; count: number; error?: string}> {
+export async function importEmployees(employees: EmployeeUploadData[]): Promise<{success: boolean; count: number; errors?: string[]}> {
   const batch = writeBatch(db);
   let count = 0;
+  const errors: string[] = [];
 
   try {
     const q = query(collection(db, 'employees'));
     const existingPlayersSnapshot = await getDocs(q);
     const existingEmails = new Set(existingPlayersSnapshot.docs.map(d => d.data().email));
 
-    employees.forEach(emp => {
-      const userEmail = emp.email;
-      if (!userEmail) {
-        console.warn(`Skipping employee with missing email.`);
+    employees.forEach((emp, index) => {
+      // Validation
+      const requiredFields = ['employeeId', 'name', 'email', 'joiningDate', 'designation', 'branch', 'department'];
+      const missingFields = requiredFields.filter(field => !emp[field as keyof EmployeeUploadData]);
+
+      if (missingFields.length > 0) {
+        errors.push(`Row ${index + 1} (Name: ${emp.name || 'N/A'}): Missing required fields: ${missingFields.join(', ')}.`);
         return;
       }
       
+      const userEmail = emp.email;
       if (existingEmails.has(userEmail)) {
+          // We can silently skip existing users or report it. Let's skip.
           return;
       }
 
@@ -162,6 +188,7 @@ export async function importEmployees(employees: EmployeeUploadData[]): Promise<
         employeeId: emp.employeeId,
         name: emp.name,
         email: userEmail,
+        mobile: emp.mobile || '',
         branch: emp.branch,
         department: emp.department,
         designation: emp.designation,
@@ -173,11 +200,15 @@ export async function importEmployees(employees: EmployeeUploadData[]): Promise<
       count++;
     });
 
+    if (errors.length > 0) {
+        return { success: false, count: 0, errors };
+    }
+
     await batch.commit();
     return { success: true, count };
   } catch(error: any) {
     console.error("Error importing employees: ", error);
-    return { success: false, count: 0, error: error.message };
+    return { success: false, count: 0, errors: [error.message] };
   }
 }
 
@@ -480,7 +511,7 @@ export async function updatePublicSettings(settings: PublicSettings): Promise<vo
 
 // === Backup & Restore Services ===
 
-const COLLECTIONS_TO_BACKUP = ['employees', 'matches', 'games', 'settings'];
+const COLLECTIONS_TO_BACKUP = ['employees', 'matches', 'games', 'settings', 'events', 'rooms'];
 
 // Helper to serialize data, converting Timestamps to a specific object format
 const serializeData = (data: any): any => {
@@ -557,4 +588,209 @@ export async function importFullDatabase(backupData: { [key: string]: any[] }): 
         }
     }
     await importBatch.commit();
+}
+
+
+// === Event Management Services ===
+
+// --- Events ---
+
+export function getEvents(callback: (events: Event[]) => void): () => void {
+  const eventsCollection = collection(db, 'events');
+  const q = query(eventsCollection);
+  return onSnapshot(q, (snapshot) => {
+    const events = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        startTime: (data.startTime as Timestamp).toDate(),
+        endTime: (data.endTime as Timestamp).toDate(),
+      } as Event;
+    });
+    callback(events);
+  });
+}
+
+export async function getEventsOnce(): Promise<Event[]> {
+    const eventsCollection = collection(db, 'events');
+    const q = query(eventsCollection);
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            name: data.name,
+            startTime: (data.startTime as Timestamp).toDate(),
+            endTime: (data.endTime as Timestamp).toDate(),
+        } as Event;
+    });
+}
+
+export async function getEvent(eventId: string): Promise<Event | null> {
+    const eventRef = doc(db, 'events', eventId);
+    const eventSnap = await getDoc(eventRef);
+
+    if (!eventSnap.exists()) {
+        return null;
+    }
+    const data = eventSnap.data();
+    return {
+        id: eventSnap.id,
+        name: data.name,
+        startTime: (data.startTime as Timestamp).toDate(),
+        endTime: (data.endTime as Timestamp).toDate(),
+    } as Event;
+}
+
+export async function addEvent(eventData: Omit<Event, 'id'>): Promise<string> {
+  const docRef = await addDoc(collection(db, 'events'), {
+    ...eventData,
+    startTime: Timestamp.fromDate(eventData.startTime),
+    endTime: Timestamp.fromDate(eventData.endTime),
+  });
+  return docRef.id;
+}
+
+export async function updateEvent(eventId: string, eventData: Partial<Omit<Event, 'id'>>): Promise<void> {
+  const eventRef = doc(db, 'events', eventId);
+  const dataToUpdate: { [key: string]: any } = { ...eventData };
+  if (eventData.startTime) {
+    dataToUpdate.startTime = Timestamp.fromDate(eventData.startTime);
+  }
+  if (eventData.endTime) {
+    dataToUpdate.endTime = Timestamp.fromDate(eventData.endTime);
+  }
+  await updateDoc(eventRef, dataToUpdate);
+}
+
+export async function deleteEvent(eventId: string): Promise<void> {
+  // Also delete all sub-collection programs
+  const programsCollection = collection(db, 'events', eventId, 'programs');
+  const programsSnapshot = await getDocs(programsCollection);
+  const batch = writeBatch(db);
+  programsSnapshot.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+
+  await deleteDoc(doc(db, 'events', eventId));
+}
+
+// --- Programs ---
+
+export function getProgramsForEvent(eventId: string, callback: (programs: Program[]) => void): () => void {
+  const programsCollection = collection(db, 'events', eventId, 'programs');
+  const q = query(programsCollection);
+  return onSnapshot(q, (snapshot) => {
+    const programs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            startTime: (data.startTime as Timestamp).toDate(),
+            endTime: (data.endTime as Timestamp).toDate(),
+        } as Program;
+    });
+    callback(programs);
+  });
+}
+
+export async function getAllPrograms(): Promise<Program[]> {
+    const programsCollectionGroup = collectionGroup(db, 'programs');
+    const q = query(programsCollectionGroup);
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+        return [];
+    }
+
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            startTime: (data.startTime as Timestamp).toDate(),
+            endTime: (data.endTime as Timestamp).toDate(),
+        } as Program;
+    });
+}
+
+export async function getProgramForEvent(eventId: string, programId: string): Promise<Program | null> {
+    const programRef = doc(db, 'events', eventId, 'programs', programId);
+    const programSnap = await getDoc(programRef);
+    if (!programSnap.exists()) {
+        return null;
+    }
+    const data = programSnap.data();
+    return {
+        id: programSnap.id,
+        ...data,
+        startTime: (data.startTime as Timestamp).toDate(),
+        endTime: (data.endTime as Timestamp).toDate(),
+    } as Program;
+}
+
+export async function addProgram(eventId: string, programData: Omit<Program, 'id'>): Promise<string> {
+  const programsCollection = collection(db, 'events', eventId, 'programs');
+  const docRef = await addDoc(programsCollection, {
+    ...programData,
+    startTime: Timestamp.fromDate(programData.startTime),
+    endTime: Timestamp.fromDate(programData.endTime),
+    endLocation: programData.endLocation === undefined ? null : programData.endLocation,
+  });
+  return docRef.id;
+}
+
+export async function updateProgram(eventId: string, programId: string, programData: Partial<Omit<Program, 'id'>>): Promise<void> {
+  const programRef = doc(db, 'events', eventId, 'programs', programId);
+  const dataToUpdate: { [key: string]: any } = { ...programData };
+    if (programData.startTime) {
+        dataToUpdate.startTime = Timestamp.fromDate(programData.startTime);
+    }
+    if (programData.endTime) {
+        dataToUpdate.endTime = Timestamp.fromDate(programData.endTime);
+    }
+    if (programData.hasOwnProperty('endLocation')) {
+        dataToUpdate.endLocation = programData.endLocation === undefined ? null : programData.endLocation;
+    }
+  await updateDoc(programRef, dataToUpdate);
+}
+
+export async function deleteProgram(eventId: string, programId: string): Promise<void> {
+  const programRef = doc(db, 'events', eventId, 'programs', programId);
+  await deleteDoc(programRef);
+}
+
+
+// === Room Planner Services ===
+
+export function getRooms(callback: (rooms: Room[]) => void): () => void {
+  const q = query(collection(db, 'rooms'));
+  return onSnapshot(q, (snapshot) => {
+    const rooms = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Room));
+    callback(rooms);
+  });
+}
+
+export async function getRoomsForEvent(eventId: string): Promise<Room[]> {
+    const q = query(collection(db, 'rooms'), where('eventId', '==', eventId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
+}
+
+
+export async function addRoom(roomData: Omit<Room, 'id'>): Promise<string> {
+  const docRef = await addDoc(collection(db, 'rooms'), roomData);
+  return docRef.id;
+}
+
+export async function updateRoom(roomId: string, roomData: Partial<Omit<Room, 'id'>>): Promise<void> {
+  const roomRef = doc(db, 'rooms', roomId);
+  await updateDoc(roomRef, roomData);
+}
+
+export async function deleteRoom(roomId: string): Promise<void> {
+  await deleteDoc(doc(db, 'rooms', roomId));
 }

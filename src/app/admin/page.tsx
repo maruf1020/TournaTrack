@@ -6,9 +6,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
-import { Lock, Loader2, Users, Sword, ListChecks, Download } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
-import EmployeeManager from '@/components/admin/EmployeeManager';
+import { Lock, Loader2, Sword, ListChecks, Download } from 'lucide-react';
 import CreateMatches from '@/components/admin/CreateMatches';
 import {
   DropdownMenu,
@@ -25,7 +23,7 @@ import type { Match, Player } from '@/lib/types';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 
-type AdminTab = 'manage' | 'create' | 'employees';
+type AdminTab = 'manage' | 'create';
 
 function AdminContent({ activeTab, onMatchesCreated }: { activeTab: AdminTab, onMatchesCreated: () => void }) {
   const [filteredMatches, setFilteredMatches] = React.useState<Match[]>([]);
@@ -126,18 +124,6 @@ function AdminContent({ activeTab, onMatchesCreated }: { activeTab: AdminTab, on
 
 
   switch (activeTab) {
-    case 'employees':
-      return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Employee Management</CardTitle>
-            <CardDescription>Add, edit, remove, and import employees. Data is stored live in Firestore.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EmployeeManager />
-          </CardContent>
-        </Card>
-      );
     case 'create':
       return (
         <Card>
@@ -226,7 +212,6 @@ export default function AdminPage() {
   const menuItems = [
     { id: 'manage', label: 'Manage Matches', icon: ListChecks },
     { id: 'create', label: 'Create Tournament', icon: Sword },
-    { id: 'employees', label: 'Manage Employees', icon: Users },
   ];
 
   const activeMenuItem = menuItems.find(item => item.id === activeTab);
@@ -235,7 +220,7 @@ export default function AdminPage() {
     <AppLayout>
       <div className="flex-1 space-y-4 p-4 sm:p-8 pt-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h1 className="text-3xl font-bold tracking-tight font-headline">Admin Panel</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-headline">Game Admin</h1>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
@@ -245,7 +230,7 @@ export default function AdminPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuLabel>Admin Sections</DropdownMenuLabel>
+                <DropdownMenuLabel>Game Admin Sections</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {menuItems.map(item => (
                   <DropdownMenuItem key={item.id} onSelect={() => setActiveTab(item.id as AdminTab)}>
