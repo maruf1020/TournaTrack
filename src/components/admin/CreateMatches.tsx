@@ -11,10 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { getPlayersOnce, addMatches, getPublicSettings, getGamesOnce } from '@/lib/services';
+import { getPlayersOnce, addMatches, getPublicSettings, getGamesOnce, getEventsOnce } from '@/lib/services';
 import { branches } from '@/lib/placeholder-data';
-import type { Player, Match, PublicSettings, Game } from '@/lib/types';
-import { Loader2, Shuffle, Users, Sword, UserCheck, GitBranch, Gamepad2, Group, Trophy } from 'lucide-react';
+import type { Player, Match, PublicSettings, Game, Event } from '@/lib/types';
+import { Loader2, Shuffle, Users, Sword, UserCheck, GitBranch, Gamepad2, Group, Trophy, CalendarDays } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
@@ -24,6 +24,7 @@ import { ScrollArea } from '../ui/scroll-area';
 const createMatchesSchema = z.object({
   branch: z.array(z.string()).min(1, 'Please select at least one branch.'),
   gameId: z.string().min(1, 'Please select a game.'),
+  eventId: z.string().min(1, 'Please select an event.'),
   tournamentName: z.string().min(3, 'Tournament name must be at least 3 characters.'),
   tournamentType: z.string().min(1, 'Please select a tournament type.'),
   numPlayers: z.string(), // For Knockout
@@ -196,6 +197,7 @@ function PlayerSelectionDialog({
 export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: () => void }) {
   const [players, setPlayers] = React.useState<Player[]>([]);
   const [games, setGames] = React.useState<Game[]>([]);
+  const [events, setEvents] = React.useState<Event[]>([]);
   const [generatedTournament, setGeneratedTournament] = React.useState<GeneratedMatch[][]>([]);
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
@@ -210,6 +212,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
     defaultValues: {
         branch: [],
         gameId: "",
+        eventId: "",
         tournamentName: "",
         tournamentType: "",
         numPlayers: "0",
@@ -252,16 +255,18 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
   React.useEffect(() => {
     async function loadData() {
         try {
-            const [playerData, gameData] = await Promise.all([
+            const [playerData, gameData, eventData] = await Promise.all([
                 getPlayersOnce(),
-                getGamesOnce()
+                getGamesOnce(),
+                getEventsOnce()
             ]);
             setPlayers(playerData);
             setGames(gameData);
+            setEvents(eventData.sort((a,b) => b.startTime.getTime() - a.startTime.getTime()));
         } catch (error) {
             toast({
                 title: 'Error loading data',
-                description: 'Could not fetch players or games.',
+                description: 'Could not fetch players, games, or events.',
                 variant: 'destructive',
             });
         }
@@ -301,6 +306,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
             return null;
         }
         const battleRoyaleMatch: GeneratedMatch = {
+            eventId: data.eventId,
             tournamentName: data.tournamentName,
             game: selectedGame.name,
             matchName: `${data.tournamentName} - Final`,
@@ -339,6 +345,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
     const round1Matches: GeneratedMatch[] = [];
     for (let i = 0; i < numTeams / 2; i++) {
         round1Matches.push({
+            eventId: data.eventId,
             tournamentName: data.tournamentName,
             game: selectedGame.name,
             matchName: `${getRoundName(0, totalRounds)} - Match ${i + 1}`,
@@ -360,6 +367,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
         const roundName = getRoundName(roundIndex, totalRounds);
         for (let i = 0; i < previousRoundMatches.length / 2; i++) {
             currentRoundMatches.push({
+                eventId: data.eventId,
                 tournamentName: data.tournamentName,
                 game: selectedGame.name,
                 matchName: `${roundName} - Match ${i + 1}`,
@@ -413,6 +421,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
         for (let j = 0; j < groupTeams.length; j++) {
             for (let k = j + 1; k < groupTeams.length; k++) {
                 allGroupMatches.push({
+                    eventId: data.eventId,
                     tournamentName: data.tournamentName,
                     game: selectedGame.name,
                     matchName: `${groupName} - Match ${matchCounter++}`,
@@ -519,6 +528,7 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
       setValue('matchType', '');
       setValue('gameId', '');
       setValue('tournamentType', '');
+      setValue('eventId', '');
     } catch (error: any) {
       toast({
         title: 'Error Creating Tournament',
@@ -609,6 +619,30 @@ export default function CreateMatches({ onMatchesCreated }: { onMatchesCreated: 
                     )}
                 />
                 {errors.gameId && <p className="text-sm text-destructive">{errors.gameId.message}</p>}
+            </div>
+             <div className="space-y-2">
+                <Label htmlFor="eventId">Event</Label>
+                <Controller
+                    name="eventId"
+                    control={control}
+                    render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger id="eventId"><CalendarDays className="mr-2 h-4 w-4" /><SelectValue placeholder="Select an event" /></SelectTrigger>
+                            <SelectContent>
+                                {events.length > 0 ? (
+                                    events.map((event) => (
+                                        <SelectItem key={event.id} value={event.id}>
+                                            {event.name}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <SelectItem value="none" disabled>No events found</SelectItem>
+                                )}
+                            </SelectContent>
+                        </Select>
+                    )}
+                />
+                {errors.eventId && <p className="text-sm text-destructive">{errors.eventId.message}</p>}
             </div>
              <div className="space-y-2">
                 <Label htmlFor="tournamentName">Tournament Name</Label>

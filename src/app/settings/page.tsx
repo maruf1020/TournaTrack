@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Lock, Palette, Trash2, ShieldX, Gamepad, Eye, Download, Upload, AlertTriangle, Settings2, Save } from 'lucide-react';
+import { Loader2, Lock, Palette, Trash2, ShieldX, Gamepad, Eye, Download, Upload, AlertTriangle, Settings2, Save, Fingerprint } from 'lucide-react';
 import type { Game, Match, PublicSettings } from '@/lib/types';
 import { getGames, addGame, deleteGame, getMatchesOnce, deleteMatchesByTournament, getPublicSettings, updatePublicSettings, exportFullDatabase, importFullDatabase } from '@/lib/services';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,6 +31,114 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 
 const matchStatuses: Match['status'][] = ['draft', 'upcoming', 'ongoing', 'finished', 'cancelled'];
+
+function PrivacySettingsCard() {
+    const { toast } = useToast();
+    const [settings, setSettings] = React.useState<PublicSettings | null>(null);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isSaving, setIsSaving] = React.useState(false);
+
+    React.useEffect(() => {
+        const unsubscribe = getPublicSettings((settingsData) => {
+            setSettings(settingsData);
+            setIsLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const handleCheckedChange = (key: keyof PublicSettings, checked: boolean) => {
+        setSettings(prev => {
+            if (!prev) return null;
+            return { ...prev, [key]: checked };
+        });
+    };
+
+    const handleSave = async () => {
+        if (!settings) return;
+        setIsSaving(true);
+        try {
+            await updatePublicSettings(settings);
+            toast({ title: 'Settings Saved', description: 'Privacy settings have been updated.' });
+        } catch (error: any) {
+            toast({ title: 'Error', description: `Failed to save settings: ${error.message}`, variant: 'destructive' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Fingerprint /> Privacy Settings</CardTitle>
+                    <CardDescription>Control what information is publicly visible and who can access the site.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                     <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-3 w-56" />
+                        </div>
+                        <Skeleton className="h-6 w-11" />
+                    </div>
+                     <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-3 w-56" />
+                        </div>
+                        <Skeleton className="h-6 w-11" />
+                    </div>
+                </CardContent>
+                 <CardFooter>
+                    <Skeleton className="h-10 w-28" />
+                </CardFooter>
+            </Card>
+        )
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Fingerprint /> Privacy & Access</CardTitle>
+                <CardDescription>Control what is publicly visible and who can access the site.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                 <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="require-login">Require Login</Label>
+                        <p className="text-xs text-muted-foreground">
+                            If enabled, users must be logged in to view any page.
+                        </p>
+                    </div>
+                    <Switch
+                        id="require-login"
+                        checked={settings?.requireLoginToView ?? false}
+                        onCheckedChange={(checked) => handleCheckedChange('requireLoginToView', checked)}
+                    />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="show-mobile">Show Mobile Numbers</Label>
+                        <p className="text-xs text-muted-foreground">
+                            Display employee mobile numbers on public profile pages.
+                        </p>
+                    </div>
+                    <Switch
+                        id="show-mobile"
+                        checked={settings?.showMobileNumber ?? false}
+                        onCheckedChange={(checked) => handleCheckedChange('showMobileNumber', checked)}
+                    />
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button onClick={handleSave} disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Settings
+                </Button>
+            </CardFooter>
+        </Card>
+    );
+}
 
 function TournamentSettingsCard() {
     const { toast } = useToast();
@@ -142,6 +250,8 @@ function PublicVisibilityCard() {
                     },
                     allowBracketEditing: false,
                     primaryColor: '#ff6600',
+                    showMobileNumber: false,
+                    requireLoginToView: false,
                 });
             }
             setIsLoading(false);
@@ -595,7 +705,7 @@ function BackupRestoreCard() {
             <CardContent className="space-y-4">
                 <div>
                     <h4 className="font-semibold text-foreground">Export Database</h4>
-                    <p className="text-sm text-muted-foreground mb-2">Download a JSON file containing all data from employees, matches, games, and settings.</p>
+                    <p className="text-sm text-muted-foreground mb-2">Download a JSON file containing all application data.</p>
                     <Button variant="outline" onClick={handleExport} disabled={isExporting}>
                         {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                         Export Full Backup
@@ -674,6 +784,7 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="space-y-6">
                         <AppearanceCard />
+                        <PrivacySettingsCard />
                         <TournamentSettingsCard />
                         <PublicVisibilityCard />
                         <GameManagementCard />

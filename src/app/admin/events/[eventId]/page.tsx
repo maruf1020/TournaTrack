@@ -120,19 +120,24 @@ export default function ManageProgramsPage() {
                     <Button asChild variant="ghost" className="mb-4">
                        <Link href="/admin/events"><ArrowLeft className="mr-2 h-4 w-4" /> Back to All Events</Link>
                     </Button>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border rounded-lg bg-card shadow-sm">
-                        <h1 className="text-3xl font-bold tracking-tight font-headline flex-grow">{event.name}</h1>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground shrink-0">
-                            <div className="flex items-center gap-2">
-                                <CalendarDays className="h-5 w-5 text-primary" />
-                                <span className="font-medium">{format(event.startTime, 'PP')}</span>
-                            </div>
-                            <ArrowRight className="h-4 w-4" />
-                             <div className="flex items-center gap-2">
-                                <CalendarDays className="h-5 w-5 text-primary" />
-                                <span className="font-medium">{format(event.endTime, 'PP')}</span>
+                    <div className="p-4 border rounded-lg bg-card shadow-sm space-y-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <h1 className="text-3xl font-bold tracking-tight font-headline flex-grow">{event.name}</h1>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <CalendarDays className="h-5 w-5 text-primary" />
+                                    <span className="font-medium">{format(event.startTime, 'PP')}</span>
+                                </div>
+                                <ArrowRight className="h-4 w-4" />
+                                 <div className="flex items-center gap-2">
+                                    <CalendarDays className="h-5 w-5 text-primary" />
+                                    <span className="font-medium">{format(event.endTime, 'PP')}</span>
+                                </div>
                             </div>
                         </div>
+                        {event.description && (
+                            <p className="text-muted-foreground">{event.description}</p>
+                        )}
                     </div>
                 </div>
                 
@@ -248,3 +253,5 @@ export default function ManageProgramsPage() {
         </AppLayout>
     );
 }
+
+    

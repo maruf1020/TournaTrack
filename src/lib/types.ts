@@ -1,4 +1,5 @@
 
+
 import { z } from 'zod';
 
 export type Player = {
@@ -34,6 +35,7 @@ export type Matchup = {
 
 export type Match = {
   id:string;
+  eventId?: string; // Link to the event
   tournamentName: string; // e.g. "Dhanmondi Carrom Championship 2024"
   game: string; // e.g. "Carrom"
   matchName: string; // e.g. "Round 1 - Match 1" or "Group A - Match 1"
@@ -90,6 +92,8 @@ export type PublicSettings = {
   };
   allowBracketEditing: boolean;
   primaryColor?: string;
+  showMobileNumber?: boolean;
+  requireLoginToView?: boolean;
 };
 
 // Schemas for AI Flow
@@ -146,6 +150,7 @@ export type Program = {
 export type Event = {
   id: string;
   name: string;
+  description?: string;
   startTime: Date;
   endTime: Date;
 };
@@ -160,3 +165,17 @@ export type Room = {
   assignedEmployees: AssignedEmployee[];
   eventId: string; 
 };
+
+// === Group Management Types ===
+export type TeamMember = Pick<Player, 'id' | 'name' | 'email' | 'imageUrl' | 'branch' | 'designation'>;
+
+export type Team = {
+  id: string;
+  eventId: string;
+  name: string;
+  leader: TeamMember;
+  managers: TeamMember[];
+  members: TeamMember[];
+};
+
+    

@@ -7,10 +7,10 @@ import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Mail, Briefcase, Building, Calendar, Hash, ArrowLeft, Loader2, User, Swords, Info } from 'lucide-react';
-import { getPlayerById, getMatchesOnce, getAllPrograms, getEventsOnce } from '@/lib/services';
-import type { Player, Match, Program, Event } from '@/lib/types';
-import { format } from 'date-fns';
+import { Mail, Briefcase, Building, Calendar, Hash, ArrowLeft, Loader2, User, Swords, Info, Phone, Users, BedDouble, Star, Shield } from 'lucide-react';
+import { getPlayerById, getMatchesOnce, getAllPrograms, getEventsOnce, getPublicSettings, getTeamsOnce, getAllRoomsOnce } from '@/lib/services';
+import type { Player, Match, Program, Event, PublicSettings, Team, Room } from '@/lib/types';
+import { format, isFuture } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -118,24 +118,32 @@ export default function EmployeeProfilePage() {
     const [player, setPlayer] = React.useState<Player | null>(null);
     const [matches, setMatches] = React.useState<Match[]>([]);
     const [assignedRoles, setAssignedRoles] = React.useState<AssignedRole[]>([]);
+    const [upcomingTeams, setUpcomingTeams] = React.useState<{ team: Team; event: Event }[]>([]);
+    const [upcomingRooms, setUpcomingRooms] = React.useState<{ room: Room; event: Event }[]>([]);
+    const [settings, setSettings] = React.useState<PublicSettings | null>(null);
     const [isLoading, setIsLoading] = React.useState(true);
 
     React.useEffect(() => {
         if (!employeeId) return;
 
+        const unsubSettings = getPublicSettings(setSettings);
+
         async function loadData() {
             setIsLoading(true);
             try {
-                const [playerData, allMatches, allPrograms, allEvents] = await Promise.all([
+                const [playerData, allMatches, allPrograms, allEvents, allTeams, allRooms] = await Promise.all([
                     getPlayerById(employeeId),
                     getMatchesOnce(),
                     getAllPrograms(),
-                    getEventsOnce()
+                    getEventsOnce(),
+                    getTeamsOnce(),
+                    getAllRoomsOnce()
                 ]);
                 
                 setPlayer(playerData);
 
                 if (playerData) {
+                    // Match History
                     const playerMatches = allMatches.filter(m => 
                         m.player1.some(p => p.id === playerData.id) ||
                         m.player2.some(p => p.id === playerData.id)
@@ -147,22 +155,49 @@ export default function EmployeeProfilePage() {
                     setMatches(playerMatches);
 
                     const eventMap = new Map(allEvents.map(e => [e.id, e]));
+
+                    // Event Roles
                     const roles: AssignedRole[] = [];
                     allPrograms.forEach(program => {
                         program.roles.forEach(role => {
                             if (role.assignedEmployees.some(e => e.id === playerData.id)) {
                                 const event = eventMap.get(program.eventId);
                                 if (event) {
-                                    roles.push({
-                                        event,
-                                        program,
-                                        role: role.roleName
-                                    });
+                                    roles.push({ event, program, role: role.roleName });
                                 }
                             }
                         })
-                    })
+                    });
                     setAssignedRoles(roles.sort((a,b) => b.program.startTime.getTime() - a.program.startTime.getTime()));
+                    
+                    // Upcoming & Ongoing Assignments
+                    const activeEvents = allEvents.filter(e => isFuture(e.endTime));
+                    const activeEventIds = new Set(activeEvents.map(e => e.id));
+
+                    // Upcoming Teams
+                    const teams: { team: Team; event: Event }[] = [];
+                    allTeams.forEach(team => {
+                        if (activeEventIds.has(team.eventId)) {
+                           const allMembers = [team.leader, ...team.managers, ...team.members];
+                           if(allMembers.some(m => m.id === playerData.id)) {
+                               const event = eventMap.get(team.eventId);
+                               if (event) teams.push({ team, event });
+                           }
+                        }
+                    });
+                    setUpcomingTeams(teams);
+                    
+                    // Upcoming Rooms
+                    const rooms: { room: Room; event: Event }[] = [];
+                    allRooms.forEach(room => {
+                        if (activeEventIds.has(room.eventId)) {
+                            if (room.assignedEmployees.some(e => e.id === playerData.id)) {
+                                const event = eventMap.get(room.eventId);
+                                if (event) rooms.push({ room, event });
+                            }
+                        }
+                    });
+                    setUpcomingRooms(rooms);
                 }
 
             } catch (error) {
@@ -173,6 +208,10 @@ export default function EmployeeProfilePage() {
         }
 
         loadData();
+
+        return () => {
+            unsubSettings();
+        }
     }, [employeeId]);
     
     if (isLoading) {
@@ -221,6 +260,9 @@ export default function EmployeeProfilePage() {
                              <h3 className="text-lg font-semibold border-b pb-2 mb-2">Contact & Organizational Info</h3>
                              <div className="divide-y">
                                 <InfoRow icon={Mail} label="Email" value={player.email} />
+                                {settings?.showMobileNumber && player.mobile && (
+                                    <InfoRow icon={Phone} label="Mobile" value={player.mobile} />
+                                )}
                                 <InfoRow icon={Building} label="Branch" value={player.branch} />
                                 <InfoRow icon={Briefcase} label="Department" value={player.department} />
                              </div>
@@ -233,6 +275,64 @@ export default function EmployeeProfilePage() {
                                 <InfoRow icon={User} label="Role" value={player.isAdmin ? 'Admin' : 'Player'} />
                              </div>
                         </div>
+                        {upcomingTeams.length > 0 && (
+                            <div className="md:col-span-2 pt-4">
+                                <h3 className="text-lg font-semibold border-b pb-2 mb-4 flex items-center gap-2">
+                                    <Users />
+                                    Assign Team
+                                </h3>
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    {upcomingTeams.map(({ team, event }) => (
+                                        <div key={team.id} className="p-4 border rounded-lg bg-muted/50 space-y-3">
+                                            <div>
+                                                <p className="text-sm text-muted-foreground">Team Name</p>
+                                                <p className="font-semibold text-primary">{team.name}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-muted-foreground">Event</p>
+                                                <p className="font-medium">{event.name}</p>
+                                            </div>
+                                            <div className="space-y-2 pt-2 border-t">
+                                                <div className="flex items-center gap-2 text-sm"><Star className="h-4 w-4 text-amber-500" /> <span className="font-semibold">Leader:</span> {team.leader.name}</div>
+                                                {team.managers.length > 0 && <div className="flex items-start gap-2 text-sm"><Shield className="h-4 w-4 text-sky-500 mt-0.5 shrink-0" /> <div><span className="font-semibold">Managers:</span> {team.managers.map(m => m.name).join(', ')}</div></div>}
+                                                {team.members.length > 0 && <div className="flex items-start gap-2 text-sm"><Users className="h-4 w-4 text-slate-500 mt-0.5 shrink-0" /> <div><span className="font-semibold">Members:</span> {team.members.map(m => m.name).join(', ')}</div></div>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                         {upcomingRooms.length > 0 && (
+                            <div className="md:col-span-2 pt-4">
+                                <h3 className="text-lg font-semibold border-b pb-2 mb-4 flex items-center gap-2">
+                                    <BedDouble />
+                                    Assign Room
+                                </h3>
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    {upcomingRooms.map(({ room, event }) => {
+                                        const roommates = room.assignedEmployees.filter(e => e.id !== player.id);
+                                        return (
+                                            <div key={room.id} className="p-4 border rounded-lg bg-muted/50 space-y-3">
+                                                <div>
+                                                    <p className="text-sm text-muted-foreground">Room Name</p>
+                                                    <p className="font-semibold text-primary">{room.name}</p>
+                                                </div>
+                                                 <div>
+                                                    <p className="text-sm text-muted-foreground">Event</p>
+                                                    <p className="font-medium">{event.name}</p>
+                                                </div>
+                                                {roommates.length > 0 && (
+                                                     <div className="pt-2 border-t">
+                                                        <p className="text-sm text-muted-foreground">Roommates</p>
+                                                        <p className="font-medium">{roommates.map(r => r.name).join(', ')}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
                         <div className="md:col-span-2 pt-4">
                              <h3 className="text-lg font-semibold border-b pb-2 mb-4 flex items-center gap-2">
                                 <Swords />
@@ -256,7 +356,7 @@ export default function EmployeeProfilePage() {
                              {assignedRoles.length > 0 ? (
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                     {assignedRoles.slice(0, 6).map(assignment => (
-                                        <AssignedRoleCard key={assignment.program.id} assignment={assignment} />
+                                        <AssignedRoleCard key={`${assignment.program.id}-${assignment.role}`} assignment={assignment} />
                                     ))}
                                 </div>
                              ) : (

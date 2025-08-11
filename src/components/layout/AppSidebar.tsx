@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -30,6 +31,7 @@ import {
   Users,
   Shield,
   BedDouble,
+  Users2,
 } from 'lucide-react';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
@@ -47,12 +49,15 @@ const gameNavItems = [
 
 const eventNavItems = [
   { href: '/events/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/events/upcoming', label: 'Upcoming', icon: CalendarDays },
   { href: '/events/map', label: 'Event Map', icon: Map },
 ];
 
 const employeeNavItems = [
   { href: '/employees', label: 'Directory', icon: Users },
+];
+
+const groupNavItems = [
+    { href: '/groups', label: 'View Groups', icon: Users2 },
 ];
 
 const roomNavItems = [
@@ -64,6 +69,7 @@ const adminNavItems = [
   { href: '/admin/events', label: 'Event Management', icon: Briefcase },
   { href: '/admin/employees', label: 'Manage Employees', icon: Users },
   { href: '/admin/rooms', label: 'Manage Rooms', icon: BedDouble },
+  { href: '/admin/groups', label: 'Manage Groups', icon: Users2 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -97,6 +103,9 @@ export default function AppSidebar() {
       }
       if (pathname.startsWith('/employees')) {
         newSet.add('Employees');
+      }
+       if (pathname.startsWith('/groups')) {
+        newSet.add('Groups');
       }
       if (pathname.startsWith('/rooms')) {
         newSet.add('Rooms');
@@ -309,6 +318,62 @@ export default function AppSidebar() {
           </CollapsibleContent>
         </Collapsible>
 
+         {/* Groups Menu */}
+        <Collapsible 
+          open={openMenus.has('Groups')} 
+          onOpenChange={() => toggleMenu('Groups')}
+        >
+          <CollapsibleTrigger asChild>
+            <SidebarMenuButton
+              variant="default"
+              className={cn(
+                "w-full justify-between h-10", 
+                state === 'collapsed' && "justify-center"
+              )}
+              tooltip={{ children: 'Groups', side: 'right' }}
+            >
+              <div className="flex items-center gap-3">
+                <Users2 className="h-4 w-4" />
+                <span className={cn(state === 'collapsed' && 'hidden')}>Groups</span>
+              </div>
+              <ChevronDown 
+                className={cn(
+                  "h-4 w-4 transition-transform duration-200", 
+                  openMenus.has('Groups') && 'rotate-180', 
+                  state === 'collapsed' && 'hidden'
+                )} 
+              />
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
+          <CollapsibleContent 
+            className={cn(
+              "overflow-hidden transition-all duration-200", 
+              state === 'collapsed' && 'hidden'
+            )}
+          >
+            <div className="ml-4 mt-1 space-y-1">
+              {groupNavItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    isActive={pathname === item.href}
+                    tooltip={{ children: item.label, side: 'right' }}
+                    className="h-9"
+                  >
+                    <Link href={item.href} className="flex items-center gap-3">
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+
         {/* Room Planner Menu */}
         <Collapsible 
           open={openMenus.has('Rooms')} 
@@ -409,7 +474,8 @@ export default function AppSidebar() {
                         pathname === item.href || 
                         (pathname.startsWith('/admin/events') && item.href === '/admin/events') || 
                         (pathname.startsWith('/admin/employees') && item.href === '/admin/employees') || 
-                        (pathname.startsWith('/admin/rooms') && item.href === '/admin/rooms')
+                        (pathname.startsWith('/admin/rooms') && item.href === '/admin/rooms') ||
+                        (pathname.startsWith('/admin/groups') && item.href === '/admin/groups')
                       }
                       tooltip={{ children: item.label, side: 'right' }}
                       className="h-9"

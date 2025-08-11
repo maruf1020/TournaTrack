@@ -42,6 +42,8 @@ export default function LoginPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [showEmailLogin, setShowEmailLogin] = React.useState(false);
+
 
   const {
     register,
@@ -73,7 +75,7 @@ export default function LoginPage() {
         const playerProfile = await getPlayerByEmail(email);
         toast({
             title: 'Login Successful',
-            description: playerProfile?.isAdmin ? 'Welcome back, Admin!' : 'Welcome back!',
+            description: `Welcome, ${playerProfile?.name || 'User'}!`,
         });
     } else {
          toast({
@@ -172,7 +174,7 @@ export default function LoginPage() {
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-headline">Tour Console</CardTitle>
             <CardDescription>
-              Sign in to manage your tournaments.
+              Sign in to access the console.
             </CardDescription>
           </CardHeader>
           
@@ -180,53 +182,63 @@ export default function LoginPage() {
             <Button variant="outline" className="w-full flex items-center gap-2" onClick={handleMicrosoftSignIn} disabled={isSubmitting}>
                <MicrosoftIcon /> Sign in with Microsoft
             </Button>
-            <div className="relative">
+            
+            <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or continue with
+                <span className="bg-card px-2 text-muted-foreground">
+                  Or
                 </span>
               </div>
             </div>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@echologyx.com"
-                  {...register('email')}
-                  disabled={isSubmitting}
-                />
-                {errors.email && (
-                  <p className="text-sm text-destructive">{errors.email.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  {...register('password')}
-                  disabled={isSubmitting}
-                />
-                {errors.password && (
-                  <p className="text-sm text-destructive">
-                    {errors.password.message}
-                  </p>
-                )}
-              </div>
-               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? 'Signing In...' : 'Sign In with Email'}
-              </Button>
-            </form>
+
+            {showEmailLogin ? (
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 animate-in fade-in-50">
+                <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                    id="email"
+                    type="email"
+                    placeholder="admin@echologyx.com"
+                    {...register('email')}
+                    disabled={isSubmitting}
+                    />
+                    {errors.email && (
+                    <p className="text-sm text-destructive">{errors.email.message}</p>
+                    )}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                    id="password"
+                    type="password"
+                    {...register('password')}
+                    disabled={isSubmitting}
+                    />
+                    {errors.password && (
+                    <p className="text-sm text-destructive">
+                        {errors.password.message}
+                    </p>
+                    )}
+                </div>
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                    {isSubmitting ? 'Signing In...' : 'Sign In with Email'}
+                </Button>
+                </form>
+            ) : (
+                 <div className="text-center">
+                    <Button variant="link" className="text-muted-foreground" onClick={() => setShowEmailLogin(true)}>
+                        Sign in with Email & Password
+                    </Button>
+                </div>
+            )}
           </CardContent>
           
         </Card>
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Powered by Firebase & Next.js
+          Powered by ELX Tour console
         </p>
       </div>
     </div>

@@ -8,7 +8,7 @@
 
 import { db } from './firebase';
 import { collection, onSnapshot, doc, setDoc, addDoc, writeBatch, deleteDoc, updateDoc, query, getDocs, where, getDoc, Timestamp, collectionGroup } from 'firebase/firestore';
-import type { Player, Match, EmployeeUploadData, Game, PublicSettings, Event, Program, Room } from './types';
+import type { Player, Match, EmployeeUploadData, Game, PublicSettings, Event, Program, Room, Team } from './types';
 
 
 // === Player Services ===
@@ -487,6 +487,8 @@ export function getPublicSettings(callback: (settings: PublicSettings | null) =>
           },
           allowBracketEditing: false,
           primaryColor: '#ff6600',
+          showMobileNumber: false,
+          requireLoginToView: false,
         };
         setDoc(settingsDoc, defaultSettings).then(() => callback(defaultSettings));
       }
@@ -511,7 +513,7 @@ export async function updatePublicSettings(settings: PublicSettings): Promise<vo
 
 // === Backup & Restore Services ===
 
-const COLLECTIONS_TO_BACKUP = ['employees', 'matches', 'games', 'settings', 'events', 'rooms'];
+const COLLECTIONS_TO_BACKUP = ['employees', 'matches', 'games', 'settings', 'events', 'rooms', 'teams'];
 
 // Helper to serialize data, converting Timestamps to a specific object format
 const serializeData = (data: any): any => {
@@ -550,10 +552,26 @@ export async function exportFullDatabase(): Promise<any> {
     for (const collectionName of COLLECTIONS_TO_BACKUP) {
         const collectionRef = collection(db, collectionName);
         const snapshot = await getDocs(collectionRef);
-        backup[collectionName] = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return { id: doc.id, ...serializeData(data) };
-        });
+        
+        if (collectionName === 'events') {
+            const eventsData = [];
+            for (const eventDoc of snapshot.docs) {
+                const eventData = eventDoc.data();
+                const programsCollectionRef = collection(db, 'events', eventDoc.id, 'programs');
+                const programsSnapshot = await getDocs(programsCollectionRef);
+                const programs = programsSnapshot.docs.map(progDoc => ({
+                    id: progDoc.id,
+                    ...serializeData(progDoc.data())
+                }));
+                eventsData.push({ id: eventDoc.id, ...serializeData(eventData), programs });
+            }
+            backup[collectionName] = eventsData;
+        } else {
+             backup[collectionName] = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return { id: doc.id, ...serializeData(data) };
+            });
+        }
     }
     return backup;
 }
@@ -567,6 +585,22 @@ export async function importFullDatabase(backupData: { [key: string]: any[] }): 
     // Step 1: Delete all existing documents in the collections
     for (const collectionName of COLLECTIONS_TO_BACKUP) {
         if (!backupData[collectionName]) continue; // Skip if collection not in backup
+        
+        // Handle subcollections for 'events'
+        if (collectionName === 'events') {
+             const eventsCollectionRef = collection(db, 'events');
+             const existingEventsSnapshot = await getDocs(eventsCollectionRef);
+             for(const eventDoc of existingEventsSnapshot.docs) {
+                 const programsCollectionRef = collection(db, 'events', eventDoc.id, 'programs');
+                 const programsSnapshot = await getDocs(programsCollectionRef);
+                 if (!programsSnapshot.empty) {
+                     const deleteProgramsBatch = writeBatch(db);
+                     programsSnapshot.docs.forEach(doc => deleteProgramsBatch.delete(doc.ref));
+                     await deleteProgramsBatch.commit();
+                 }
+             }
+        }
+        
         const collectionRef = collection(db, collectionName);
         const snapshot = await getDocs(collectionRef);
         if (snapshot.empty) continue;
@@ -576,18 +610,28 @@ export async function importFullDatabase(backupData: { [key: string]: any[] }): 
     }
     
     // Step 2: Import new documents from the backup
-    const importBatch = writeBatch(db);
     for (const collectionName of COLLECTIONS_TO_BACKUP) {
+        const importBatch = writeBatch(db);
         if (backupData[collectionName]) {
-            backupData[collectionName].forEach((docDataWithId: any) => {
-                const { id, ...data } = docDataWithId;
+            for (const docDataWithId of backupData[collectionName]) {
+                const { id, programs, ...data } = docDataWithId;
                 const deserialized = deserializeData(data);
                 const docRef = doc(db, collectionName, id);
                 importBatch.set(docRef, deserialized);
-            });
+
+                // Handle subcollection for 'events'
+                if (collectionName === 'events' && programs && Array.isArray(programs)) {
+                    for (const programDataWithId of programs) {
+                        const { id: programId, ...programData } = programDataWithId;
+                        const deserializedProgram = deserializeData(programData);
+                        const programRef = doc(db, 'events', id, 'programs', programId);
+                        importBatch.set(programRef, deserializedProgram);
+                    }
+                }
+            }
         }
+         await importBatch.commit();
     }
-    await importBatch.commit();
 }
 
 
@@ -774,6 +818,14 @@ export function getRooms(callback: (rooms: Room[]) => void): () => void {
   });
 }
 
+export async function getAllRoomsOnce(): Promise<Room[]> {
+    const roomsCollection = collection(db, 'rooms');
+    const q = query(roomsCollection);
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
+}
+
+
 export async function getRoomsForEvent(eventId: string): Promise<Room[]> {
     const q = query(collection(db, 'rooms'), where('eventId', '==', eventId));
     const snapshot = await getDocs(q);
@@ -793,4 +845,40 @@ export async function updateRoom(roomId: string, roomData: Partial<Omit<Room, 'i
 
 export async function deleteRoom(roomId: string): Promise<void> {
   await deleteDoc(doc(db, 'rooms', roomId));
+}
+
+
+// === Group/Team Services ===
+
+export function getTeams(callback: (teams: Team[]) => void): () => void {
+  const teamsCollection = collection(db, 'teams');
+  const q = query(teamsCollection);
+  return onSnapshot(q, (snapshot) => {
+    const teams = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Team));
+    callback(teams);
+  });
+}
+
+export async function getTeamsOnce(): Promise<Team[]> {
+    const teamsCollection = collection(db, 'teams');
+    const q = query(teamsCollection);
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+}
+
+export async function addTeam(teamData: Omit<Team, 'id'>): Promise<string> {
+    const docRef = await addDoc(collection(db, 'teams'), teamData);
+    return docRef.id;
+}
+
+export async function updateTeam(teamId: string, teamData: Partial<Omit<Team, 'id'>>): Promise<void> {
+    const teamRef = doc(db, 'teams', teamId);
+    await updateDoc(teamRef, teamData);
+}
+
+export async function deleteTeam(teamId: string): Promise<void> {
+    await deleteDoc(doc(db, 'teams', teamId));
 }

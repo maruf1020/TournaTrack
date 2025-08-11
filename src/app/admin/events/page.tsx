@@ -39,10 +39,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import type { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 // --- Event Form ---
 const EventForm = ({ eventToEdit, onFinished }: { eventToEdit?: Event | null; onFinished: () => void }) => {
   const [name, setName] = React.useState('');
+  const [description, setDescription] = React.useState('');
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const { toast } = useToast();
@@ -50,11 +52,13 @@ const EventForm = ({ eventToEdit, onFinished }: { eventToEdit?: Event | null; on
   const isEditMode = !!eventToEdit;
 
   React.useEffect(() => {
-    if (isEditMode) {
+    if (isEditMode && eventToEdit) {
       setName(eventToEdit.name);
+      setDescription(eventToEdit.description || '');
       setDateRange({ from: eventToEdit.startTime, to: eventToEdit.endTime });
     } else {
       setName('');
+      setDescription('');
       setDateRange(undefined);
     }
   }, [eventToEdit, isEditMode]);
@@ -69,10 +73,11 @@ const EventForm = ({ eventToEdit, onFinished }: { eventToEdit?: Event | null; on
     try {
       const eventData = {
         name,
+        description,
         startTime: dateRange.from,
         endTime: dateRange.to,
       };
-      if (isEditMode) {
+      if (isEditMode && eventToEdit) {
         await updateEvent(eventToEdit.id, eventData);
         toast({ title: 'Event Updated', description: 'The event details have been saved.' });
       } else {
@@ -92,6 +97,10 @@ const EventForm = ({ eventToEdit, onFinished }: { eventToEdit?: Event | null; on
       <div className="space-y-2">
         <Label htmlFor="eventName">Event Name</Label>
         <Input id="eventName" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Annual Tour 2025" />
+      </div>
+       <div className="space-y-2">
+        <Label htmlFor="eventDescription">Event Description (Optional)</Label>
+        <Textarea id="eventDescription" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Provide a brief description of the event..." />
       </div>
        <div className="space-y-2">
           <Label htmlFor="eventDateRange">Event Date Range</Label>
@@ -264,3 +273,5 @@ export default function EventManagementPage() {
         </AppLayout>
     );
 }
+
+    
