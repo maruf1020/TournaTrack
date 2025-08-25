@@ -293,15 +293,16 @@ export async function getMatchesOnce(): Promise<Match[]> {
 
 const findNextMatchForWinner = async (matchName: string, tournamentName: string): Promise<{ matchId: string, playerSlot: 'player1' | 'player2' } | null> => {
     const matchesRef = collection(db, "matches");
+    const placeholder = `Winner of ${matchName}`;
     
     // Check if any match has this matchName as a placeholder
-    const q1 = query(matchesRef, where("player1Placeholder", "==", `Winner of ${matchName}`), where("tournamentName", "==", tournamentName));
+    const q1 = query(matchesRef, where("player1Placeholder", "==", placeholder), where("tournamentName", "==", tournamentName));
     const snapshot1 = await getDocs(q1);
     if (!snapshot1.empty) {
         return { matchId: snapshot1.docs[0].id, playerSlot: 'player1' };
     }
 
-    const q2 = query(matchesRef, where("player2Placeholder", "==", `Winner of ${matchName}`), where("tournamentName", "==", tournamentName));
+    const q2 = query(matchesRef, where("player2Placeholder", "==", placeholder), where("tournamentName", "==", tournamentName));
     const snapshot2 = await getDocs(q2);
     if (!snapshot2.empty) {
         return { matchId: snapshot2.docs[0].id, playerSlot: 'player2' };
@@ -648,6 +649,7 @@ export function getEvents(callback: (events: Event[]) => void): () => void {
       return {
         id: doc.id,
         name: data.name,
+        description: data.description || '',
         startTime: (data.startTime as Timestamp).toDate(),
         endTime: (data.endTime as Timestamp).toDate(),
       } as Event;
@@ -665,6 +667,7 @@ export async function getEventsOnce(): Promise<Event[]> {
         return {
             id: doc.id,
             name: data.name,
+            description: data.description || '',
             startTime: (data.startTime as Timestamp).toDate(),
             endTime: (data.endTime as Timestamp).toDate(),
         } as Event;
@@ -682,6 +685,7 @@ export async function getEvent(eventId: string): Promise<Event | null> {
     return {
         id: eventSnap.id,
         name: data.name,
+        description: data.description || '',
         startTime: (data.startTime as Timestamp).toDate(),
         endTime: (data.endTime as Timestamp).toDate(),
     } as Event;
@@ -882,3 +886,5 @@ export async function updateTeam(teamId: string, teamData: Partial<Omit<Team, 'i
 export async function deleteTeam(teamId: string): Promise<void> {
     await deleteDoc(doc(db, 'teams', teamId));
 }
+
+    

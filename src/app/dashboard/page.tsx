@@ -64,7 +64,13 @@ function DashboardSkeleton() {
     )
 }
 
-const PlayerListDisplay = ({ players, isWinner }: { players: Player[], isWinner?: boolean }) => {
+const PlayerListDisplay = ({ players, isWinner, placeholder }: { players: Player[], isWinner?: boolean, placeholder?: string }) => {
+    if ((!players || players.length === 0) && placeholder) {
+      return <div className="text-sm italic opacity-70">{placeholder}</div>;
+    }
+    if (!players || players.length === 0) {
+      return <div className="text-sm italic opacity-70">TBD</div>;
+    }
     return (
       <div className={cn(isWinner && "font-bold text-emerald-600")}>
         {players.map((p, index) => (
@@ -95,7 +101,7 @@ function MatchListCard({ title, icon: Icon, matches, emptyText }: { title: strin
                     {title === 'Upcoming Matches' ? 'Matches scheduled for the future.' : 'Recently concluded matches.'}
                 </CardDescription>
             </CardHeader>
-            <CardContent className="flex-grow space-y-4 max-h-[650px] overflow-y-auto">
+            <CardContent className="flex-grow space-y-4 max-h-[680px] overflow-y-auto">
                 {displayedMatches.length > 0 ? (
                     <div className="space-y-4">
                         {displayedMatches.map(match => {
@@ -134,9 +140,9 @@ function MatchListCard({ title, icon: Icon, matches, emptyText }: { title: strin
                                             </p>
                                         ) : (
                                           <>
-                                            <PlayerListDisplay players={match.player1} isWinner={p1IsWinner || undefined} />
+                                            <PlayerListDisplay players={match.player1} isWinner={p1IsWinner || undefined} placeholder={match.player1Placeholder} />
                                             <div className="font-sans font-bold text-center text-xs py-1">vs</div>
-                                            <PlayerListDisplay players={match.player2} isWinner={p2IsWinner || undefined} />
+                                            <PlayerListDisplay players={match.player2} isWinner={p2IsWinner || undefined} placeholder={match.player2Placeholder} />
                                           </>
                                         )}
                                     </div>

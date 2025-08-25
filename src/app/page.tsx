@@ -68,7 +68,13 @@ function DashboardSkeleton() {
     )
 }
 
-const PlayerListDisplay = ({ players, isWinner }: { players: Player[], isWinner?: boolean }) => {
+const PlayerListDisplay = ({ players, isWinner, placeholder }: { players?: Player[], isWinner?: boolean, placeholder?: string }) => {
+    if ((!players || players.length === 0) && placeholder) {
+      return <div className="text-sm italic opacity-70">{placeholder}</div>;
+    }
+    if (!players || players.length === 0) {
+      return <div className="text-sm italic opacity-70">TBD</div>;
+    }
     return (
       <div className={cn("text-sm", isWinner && "font-bold text-emerald-600")}>
         {players.map((p, index) => (
@@ -118,9 +124,9 @@ function MatchListCard({ title, icon: Icon, matches, emptyText, itemsPerPage = 3
                                         {formattedDate ? <div className="font-medium">{formattedDate}</div> : <div>TBD</div>}
                                     </div>
                                     <div>
-                                      <PlayerListDisplay players={match.player1} isWinner={p1IsWinner || undefined} />
+                                      <PlayerListDisplay players={match.player1} isWinner={p1IsWinner || undefined} placeholder={match.player1Placeholder} />
                                       <div className="font-sans font-bold text-center text-xs py-1">vs</div>
-                                      <PlayerListDisplay players={match.player2} isWinner={p2IsWinner || undefined} />
+                                      <PlayerListDisplay players={match.player2} isWinner={p2IsWinner || undefined} placeholder={match.player2Placeholder} />
                                     </div>
                                 </div>
                             )

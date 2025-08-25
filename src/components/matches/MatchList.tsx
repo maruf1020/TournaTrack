@@ -12,9 +12,9 @@ import {
   TableHead,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Trophy, Loader2, Filter, Calendar as CalendarIcon, Pencil, Trash2, Download } from 'lucide-react';
+import { Trophy, Loader2, Filter, Calendar as CalendarIcon, Pencil, Trash2, Download, Users } from 'lucide-react';
 import type { Match, Player, Game, PublicSettings } from '@/lib/types';
-import { getMatchesOnce, updateMatch, getPublicSettings, getGamesOnce } from '@/lib/services';
+import { getMatchesOnce, updateMatch, getPublicSettings, getGamesOnce, getPlayersOnce } from '@/lib/services';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -31,180 +31,240 @@ import { useAuth } from '@/hooks/use-auth';
 import { useSortableTable } from '@/hooks/use-sortable-table';
 import { SortableTableHeader } from '@/components/ui/sortable-table-header';
 import { Skeleton } from '@/components/ui/skeleton';
+import PlayerSelectionDialog from '@/app/admin/rooms/PlayerSelectionDialog'; // Reusing this dialog
 
 
-function EditMatchDialog({ match, onUpdate, open, onOpenChange }: { match: Match | null, onUpdate: (match: Match) => void, open: boolean, onOpenChange: (open: boolean) => void }) {
-    const [date, setDate] = React.useState<Date | undefined>();
-    const [startTime, setStartTime] = React.useState<string>("");
-    const [endTime, setEndTime] = React.useState<string>("");
-    const [status, setStatus] = React.useState<Match['status']>('upcoming');
-    const [score1, setScore1] = React.useState(0);
-    const [score2, setScore2] = React.useState(0);
-    const [isDatePublished, setIsDatePublished] = React.useState(false);
-    const [winnerId, setWinnerId] = React.useState<string | null>(null);
+function EditMatchDialog({ match, onUpdate, open, onOpenChange, allPlayers }: { 
+    match: Match | null, 
+    onUpdate: (match: Match) => void, 
+    open: boolean, 
+    onOpenChange: (open: boolean) => void,
+    allPlayers: Player[]
+}) {
+    const [isSaving, setIsSaving] = React.useState(false);
+    const [editedMatch, setEditedMatch] = React.useState<Match | null>(null);
+    const [playerPickerState, setPlayerPickerState] = React.useState<{ open: boolean; target: 'p1' | 'p2' | 'br'; teamIndex: number; } | null>(null);
     const { toast } = useToast();
 
     React.useEffect(() => {
         if (match) {
             // Firestore timestamps need to be converted to JS Date objects
-            if (match.date) {
-                const jsDate = (match.date as any).toDate ? (match.date as any).toDate() : new Date(match.date);
-                setDate(jsDate);
-            } else {
-                setDate(undefined);
-            }
-            setStartTime(match.startTime || "");
-            setEndTime(match.endTime || "");
-            setStatus(match.status || 'draft');
-            setScore1(match.score?.player1 || 0);
-            setScore2(match.score?.player2 || 0);
-            setIsDatePublished(match.isDatePublished || false);
-            setWinnerId(match.winnerId || null);
+            const jsDate = match.date ? ((match.date as any).toDate ? (match.date as any).toDate() : new Date(match.date)) : undefined;
+            setEditedMatch({ ...match, date: jsDate });
+        } else {
+            setEditedMatch(null);
         }
     }, [match]);
 
-    const handleSave = async () => {
-        if (!match) return;
+    const handleValueChange = (field: keyof Match | `score.${'player1'|'player2'}`, value: any) => {
+        setEditedMatch(prev => {
+            if (!prev) return null;
+            if (field.startsWith('score.')) {
+                const scoreField = field.split('.')[1] as 'player1' | 'player2';
+                return { ...prev, score: { ...prev.score, [scoreField]: Number(value) } };
+            }
+            return { ...prev, [field]: value };
+        });
+    };
 
-        const updatedMatchData: Partial<Match> = {
-            date: date || null,
-            startTime,
-            endTime,
-            score: { player1: score1, player2: score2 },
-            isDatePublished: isDatePublished,
-            winnerId: winnerId,
-            status: status
-        };
+    const handleSave = async () => {
+        if (!editedMatch) return;
+        setIsSaving(true);
         
-        if (winnerId) {
-            updatedMatchData.status = 'finished';
+        let winnerId = editedMatch.winnerId;
+        // If status is changed to finished, determine winner from score
+        if (editedMatch.status === 'finished' && !winnerId && editedMatch.score.player1 !== editedMatch.score.player2) {
+             if (editedMatch.score.player1 > editedMatch.score.player2 && editedMatch.player1.length > 0) {
+                winnerId = editedMatch.player1[0].id;
+             } else if (editedMatch.score.player2 > editedMatch.score.player1 && editedMatch.player2.length > 0) {
+                 winnerId = editedMatch.player2[0].id;
+             }
         }
+        
+        const finalMatchData = { 
+            ...editedMatch, 
+            winnerId,
+            date: editedMatch.date || null // Ensure date is null instead of undefined
+        };
 
         try {
-            await updateMatch(match.id, updatedMatchData);
-            onUpdate({ ...match, ...updatedMatchData, id: match.id }); 
+            await updateMatch(editedMatch.id, finalMatchData);
+            onUpdate(finalMatchData); 
             toast({ title: 'Match Updated', description: 'The match details have been saved.' });
             onOpenChange(false);
         } catch (error: any) {
             toast({ title: 'Update Failed', description: error.message, variant: 'destructive'});
+        } finally {
+            setIsSaving(false);
         }
     };
     
-    if (!match) return null;
+    if (!editedMatch) return null;
 
-    const allPlayersInMatch = [...(match.allPlayers || []), ...match.player1, ...match.player2].filter(p => p.id);
+    const openPlayerPicker = (target: 'p1' | 'p2' | 'br', teamIndex: number = 0) => {
+        setPlayerPickerState({ open: true, target, teamIndex });
+    };
+
+    const handlePlayerSelection = (selected: Player[]) => {
+        if (!playerPickerState || selected.length === 0) return;
+        
+        const newPlayer = selected[0]; // We are swapping one player at a time.
+        
+        setEditedMatch(prev => {
+            if (!prev) return null;
+            const newMatch = { ...prev };
+            
+            if (playerPickerState.target === 'p1') {
+                newMatch.player1[playerPickerState.teamIndex] = newPlayer;
+            } else if (playerPickerState.target === 'p2') {
+                newMatch.player2[playerPickerState.teamIndex] = newPlayer;
+            } else if (playerPickerState.target === 'br' && newMatch.allPlayers) {
+                newMatch.allPlayers[playerPickerState.teamIndex] = newPlayer;
+            }
+
+            return newMatch;
+        });
+    };
 
     const getPlayerNames = (players: Player[], placeholder?: string) => {
       if (placeholder && (!players || players.length === 0)) return placeholder;
       if (!players || players.length === 0) return "TBD";
       return players.map(p => p.name).join(' & ');
     }
+    
+    const allPlayersInMatch = [...(editedMatch.allPlayers || []), ...editedMatch.player1, ...editedMatch.player2].filter(p => p.id);
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Edit Match</DialogTitle>
+                    <DialogTitle>Edit Match: {editedMatch.matchName}</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                     <div className="space-y-2">
-                        <Label>Status</Label>
-                        <Select value={status} onValueChange={(value) => setStatus(value as Match['status'])}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="draft">Draft</SelectItem>
-                                <SelectItem value="upcoming">Upcoming</SelectItem>
-                                <SelectItem value="ongoing">Ongoing</SelectItem>
-                                <SelectItem value="finished">Finished</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                            </SelectContent>
-                        </Select>
-                     </div>
-                     <div className="space-y-2">
-                        <Label>Match Date</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                variant={"outline"}
-                                className={cn(
-                                    "w-full justify-start text-left font-normal",
-                                    !date && "text-muted-foreground"
-                                )}
-                                >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {date ? format(date, "PPP") : <span>Pick a date</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={date} onSelect={setDate} initialFocus/>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                    {/* Column 1: Players & Winner */}
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-lg border-b pb-2">Participants & Winner</h4>
+                        {editedMatch.allPlayers && editedMatch.allPlayers.length > 0 ? (
+                            <div className="space-y-2">
+                                <Label>Battle Royale Players ({editedMatch.allPlayers.length})</Label>
+                                <div className="p-2 border rounded-md max-h-40 overflow-y-auto">
+                                    {editedMatch.allPlayers.map((p, index) => (
+                                        <div key={p.id} className="flex items-center justify-between text-sm py-1">
+                                            <span>{p.name}</span>
+                                            <Button variant="ghost" size="sm" onClick={() => openPlayerPicker('br', index)}>Edit</Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Team 1</Label>
+                                    <div className="p-2 border rounded-md min-h-[60px]">
+                                        {editedMatch.player1.map((p, index) => (
+                                            <div key={p.id} className="flex items-center justify-between text-sm py-1">
+                                                <span>{p.name}</span>
+                                                <Button variant="ghost" size="sm" onClick={() => openPlayerPicker('p1', index)}>Edit</Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Team 2</Label>
+                                    <div className="p-2 border rounded-md min-h-[60px]">
+                                        {editedMatch.player2.map((p, index) => (
+                                            <div key={p.id} className="flex items-center justify-between text-sm py-1">
+                                                <span>{p.name}</span>
+                                                <Button variant="ghost" size="sm" onClick={() => openPlayerPicker('p2', index)}>Edit</Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <div className="space-y-2">
-                            <Label>Start Time</Label>
-                            <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>End Time</Label>
-                            <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
-                        </div>
-                    </div>
-                     <div className="flex items-center space-x-2">
-                        <Checkbox id="isDatePublished" checked={isDatePublished} onCheckedChange={(checked) => setIsDatePublished(!!checked)} />
-                        <label htmlFor="isDatePublished" className="text-sm font-medium leading-none">
-                            Publish Date
-                        </label>
-                    </div>
-                    {match.allPlayers && match.allPlayers.length > 0 ? (
-                         <div className="space-y-2">
                             <Label>Winner</Label>
-                            <Select onValueChange={(value) => setWinnerId(value === 'none' ? null : value)} defaultValue={winnerId || 'none'}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a winner" />
-                                </SelectTrigger>
+                             <Select onValueChange={(value) => handleValueChange('winnerId', value === 'none' ? null : value)} value={editedMatch.winnerId || 'none'}>
+                                <SelectTrigger><SelectValue placeholder="Select a winner" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">None</SelectItem>
-                                    {allPlayersInMatch.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                                    {editedMatch.allPlayers && editedMatch.allPlayers.length > 0 ? (
+                                        allPlayersInMatch.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)
+                                    ) : (
+                                        <>
+                                         {editedMatch.player1.length > 0 && <SelectItem value={editedMatch.player1[0].id}>{getPlayerNames(editedMatch.player1)}</SelectItem>}
+                                         {editedMatch.player2.length > 0 && <SelectItem value={editedMatch.player2[0].id}>{getPlayerNames(editedMatch.player2)}</SelectItem>}
+                                        </>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    {/* Column 2: Details & Score */}
+                    <div className="space-y-4">
+                         <h4 className="font-semibold text-lg border-b pb-2">Details & Score</h4>
+                         <div className="space-y-2">
+                            <Label>Status</Label>
+                            <Select value={editedMatch.status} onValueChange={(value) => handleValueChange('status', value as Match['status'])}>
+                                <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="draft">Draft</SelectItem>
+                                    <SelectItem value="upcoming">Upcoming</SelectItem>
+                                    <SelectItem value="ongoing">Ongoing</SelectItem>
+                                    <SelectItem value="finished">Finished</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
                                 </SelectContent>
                             </Select>
                          </div>
-                    ) : (
-                       <>
+                         <div className="space-y-2">
+                            <Label>Match Date</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !editedMatch.date && "text-muted-foreground")}>
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {editedMatch.date ? format(new Date(editedMatch.date), "PPP") : <span>Pick a date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={editedMatch.date ? new Date(editedMatch.date) : undefined} onSelect={(d) => handleValueChange('date', d)} initialFocus/></PopoverContent>
+                            </Popover>
+                        </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Score: {getPlayerNames(match.player1, match.player1Placeholder)}</Label>
-                                <Input type="number" value={score1} onChange={(e) => setScore1(Number(e.target.value))} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Score: {getPlayerNames(match.player2, match.player2Placeholder)}</Label>
-                                <Input type="number" value={score2} onChange={(e) => setScore2(Number(e.target.value))} />
-                            </div>
+                            <div className="space-y-2"><Label>Start Time</Label><Input type="time" value={editedMatch.startTime || ''} onChange={e => handleValueChange('startTime', e.target.value)} /></div>
+                            <div className="space-y-2"><Label>End Time</Label><Input type="time" value={editedMatch.endTime || ''} onChange={e => handleValueChange('endTime', e.target.value)} /></div>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Winner</Label>
-                             <Select onValueChange={(value) => setWinnerId(value === 'none' ? null : value)} defaultValue={winnerId || 'none'}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a winner" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                     <SelectItem value="none">None</SelectItem>
-                                     {match.player1.length > 0 && <SelectItem value={match.player1[0].id}>{getPlayerNames(match.player1)}</SelectItem>}
-                                     {match.player2.length > 0 && <SelectItem value={match.player2[0].id}>{getPlayerNames(match.player2)}</SelectItem>}
-                                </SelectContent>
-                            </Select>
+                         <div className="flex items-center space-x-2">
+                            <Checkbox id="isDatePublished" checked={editedMatch.isDatePublished} onCheckedChange={(checked) => handleValueChange('isDatePublished', !!checked)} />
+                            <Label htmlFor="isDatePublished" className="font-normal">Publish Date</Label>
                         </div>
-                       </>
-                    )}
+                        {(!editedMatch.allPlayers || editedMatch.allPlayers.length === 0) && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2"><Label>Score: {getPlayerNames(editedMatch.player1, editedMatch.player1Placeholder)}</Label><Input type="number" value={editedMatch.score.player1} onChange={(e) => handleValueChange('score.player1', e.target.value)} /></div>
+                                <div className="space-y-2"><Label>Score: {getPlayerNames(editedMatch.player2, editedMatch.player2Placeholder)}</Label><Input type="number" value={editedMatch.score.player2} onChange={(e) => handleValueChange('score.player2', e.target.value)} /></div>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                    <Button onClick={handleSave}>Save Changes</Button>
+                    <Button onClick={handleSave} disabled={isSaving}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Changes
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+         {playerPickerState && (
+            <PlayerSelectionDialog
+                open={playerPickerState.open}
+                onOpenChange={(o) => setPlayerPickerState(prev => prev ? { ...prev, open: o } : null)}
+                allPlayers={allPlayers}
+                initialSelection={[]} // Start with empty selection for a swap
+                onConfirm={handlePlayerSelection}
+                capacity={1} // We are swapping one player at a time
+            />
+        )}
+        </>
     )
 }
 
@@ -285,6 +345,7 @@ const MatchListSkeleton = () => (
 export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmin?: boolean, onFilteredMatchesChange?: (matches: Match[]) => void }) {
   const [matchList, setMatchList] = React.useState<Match[]>([]);
   const [games, setGames] = React.useState<Game[]>([]);
+  const [allPlayers, setAllPlayers] = React.useState<Player[]>([]);
   const [publicSettings, setPublicSettings] = React.useState<PublicSettings | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [editingMatch, setEditingMatch] = React.useState<Match | null>(null);
@@ -308,21 +369,23 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
     async function loadData() {
         setLoading(true);
         try {
-            const [matches, gamesData, settings] = await Promise.all([
+            const dataToFetch = [
                 getMatchesOnce(),
                 getGamesOnce(),
-                !isAdmin ? new Promise<PublicSettings | null>((resolve) => {
-                    const unsub = getPublicSettings((s) => {
-                        resolve(s);
-                        unsub();
-                    });
-                }) : Promise.resolve(null)
-            ]);
-            setMatchList(matches);
-            setGames(gamesData);
-            if (settings) {
-                setPublicSettings(settings);
+                getPlayersOnce(),
+                !isAdmin ? getPublicSettings(s => setPublicSettings(s)) : Promise.resolve(null),
+            ];
+
+            const [matches, gamesData, playersData, settingsUnsub] = await Promise.all(dataToFetch);
+
+            setMatchList(matches as Match[]);
+            setGames(gamesData as Game[]);
+            setAllPlayers(playersData as Player[]);
+            
+            if (settingsUnsub && typeof settingsUnsub === 'function') {
+                return () => settingsUnsub();
             }
+
         } catch (error) {
             toast({ title: 'Error', description: 'Failed to load match data.', variant: 'destructive' });
             console.error(error);
@@ -348,18 +411,18 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
     return matches.filter(match => {
         const searchLower = filters.search.toLowerCase();
 
-        const allPlayers = [...(match.allPlayers || []), ...match.player1, ...match.player2].filter(p => p.name);
+        const allPlayersInMatch = [...(match.allPlayers || []), ...match.player1, ...match.player2].filter(p => p.name);
         const nameMatch = filters.search ? 
-            allPlayers.some(p => p.name.toLowerCase().includes(searchLower)) ||
+            allPlayersInMatch.some(p => p.name.toLowerCase().includes(searchLower)) ||
             (match.player1Placeholder && match.player1Placeholder.toLowerCase().includes(searchLower)) ||
             (match.player2Placeholder && match.player2Placeholder.toLowerCase().includes(searchLower))
             : true;
         
         const branchMatch = filters.branch === 'all' ? true : 
-            allPlayers.some(p => p.branch === filters.branch);
+            allPlayersInMatch.some(p => p.branch === filters.branch);
             
         const departmentMatch = filters.department === 'all' ? true :
-            allPlayers.some(p => p.department === filters.department);
+            allPlayersInMatch.some(p => p.department === filters.department);
 
         const gameMatch = filters.game === 'all' ? true : match.game === filters.game;
 
@@ -573,11 +636,13 @@ export function MatchList({ isAdmin = false, onFilteredMatchesChange }: { isAdmi
               open={!!editingMatch}
               onOpenChange={(open) => !open && setEditingMatch(null)}
               onUpdate={(updatedMatch) => {
-                  setMatchList(prev => prev.map(m => m.id === updatedMatch.id ? updatedMatch : m));
+                  setMatchList(prev => prev.map(m => m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
                   setEditingMatch(null);
               }}
+              allPlayers={allPlayers}
           />
         )}
     </div>
   );
 }
+
