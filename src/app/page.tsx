@@ -376,15 +376,31 @@ export default function HomePage() {
     };
   }, [players, matches, rooms, now, events, games]);
   
+  // Helper function to safely convert date to JavaScript Date object
+  const convertToDate = (date: any): Date => {
+    if (!date) return new Date(0); // Return epoch if no date
+    try {
+      // Handle Firestore Timestamp
+      if (date.toDate && typeof date.toDate === 'function') {
+        return date.toDate();
+      }
+      // Handle regular Date objects or date strings
+      const jsDate = new Date(date);
+      return isNaN(jsDate.getTime()) ? new Date(0) : jsDate;
+    } catch (e) {
+      return new Date(0);
+    }
+  };
+
   const upcomingMatches = React.useMemo(() =>
     matches.filter(m => m.status === 'upcoming' && m.date)
-      .sort((a, b) => ((a.date as any).toDate() || new Date(a.date)).getTime() - ((b.date as any).toDate() || new Date(b.date)).getTime()),
+      .sort((a, b) => convertToDate(a.date).getTime() - convertToDate(b.date).getTime()),
     [matches]
   );
   
   const recentMatches = React.useMemo(() =>
     matches.filter(m => m.status === 'finished')
-      .sort((a,b) => ((b.date as any).toDate() || new Date(b.date)).getTime() - ((a.date as any).toDate() || new Date(a.date)).getTime()),
+      .sort((a, b) => convertToDate(b.date).getTime() - convertToDate(a.date).getTime()),
     [matches]
   );
 
